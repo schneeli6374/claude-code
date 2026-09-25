@@ -20,7 +20,8 @@ Benötigt nur Python 3.8+ (keine Zusatzpakete). Der Browser öffnet sich unter h
 
 ## Funktionen
 
-- Beliebige Symbole hinzufügen/entfernen (z. B. `AAPL`, `SAP.DE`, `BAS.DE`, `7203.T`), Liste wird gespeichert
+- Standardliste: NVIDIA, Apple, Bitcoin, Microsoft, Amazon, Alphabet, Meta, Tesla, SAP, Siemens
+- Beliebige Symbole hinzufügen/entfernen (z. B. `BAS.DE`, `ETH-USD`, `BTC-EUR`, `7203.T`), Liste wird gespeichert
 - Karte anklicken → Kerzenchart mit SMA 20/50/200 + Bollinger, Volumen, RSI/MACD/Stochastik
 - Indikatoren: SMA/EMA 10–200, Hull MA, VWMA, Golden/Death Cross, RSI, Stochastik, Stoch RSI, MACD,
   Williams %R, CCI, Momentum, ROC, Awesome Oscillator, Ultimate Oscillator, TRIX, Elder Power,

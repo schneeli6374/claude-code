@@ -97,6 +97,7 @@ DEMO_NAMES = {
     "TSLA": ("Tesla Inc.", "USD", 240), "SAP.DE": ("SAP SE", "EUR", 200),
     "SIE.DE": ("Siemens AG", "EUR", 175), "ALV.DE": ("Allianz SE", "EUR", 270),
     "BMW.DE": ("BMW AG", "EUR", 90), "MBG.DE": ("Mercedes-Benz Group AG", "EUR", 65),
+    "BTC-USD": ("Bitcoin USD", "USD", 65000), "ETH-USD": ("Ethereum USD", "USD", 3000),
 }
 
 
@@ -632,12 +633,14 @@ def analyze(raw):
     def rnd(arr, d=4):
         return [round(x, d) if x is not None else None for x in arr[-k:]]
 
+    year_ago = cs[-1]["t"] - 365 * 86400  # Kalendertage, damit es auch für Krypto (7 Tage/Woche) passt
+    year = [x for x in cs if x["t"] >= year_ago]
     change = price - prev
     return {
         "symbol": raw["symbol"], "name": raw["name"], "currency": raw["currency"],
         "exchange": raw["exchange"], "marketTime": raw.get("marketTime"),
         "price": round(price, 4), "change": round(change, 4), "changePct": round(100 * change / prev, 3),
-        "dayHigh": h[-1], "dayLow": l[-1], "high52": max(h[-252:]), "low52": min(l[-252:]),
+        "dayHigh": h[-1], "dayLow": l[-1], "high52": max(x["h"] for x in year), "low52": min(x["l"] for x in year),
         "volume": v[-1],
         "signals": sig, "groups": groups, "total": total, "tip": tip,
         "pivots": {kk: round(vv, 4) for kk, vv in pivots.items()},
@@ -825,7 +828,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 <header>
   <h1>📈 Aktien-Dashboard<span id="demoTag"></span></h1>
   <form id="addForm" style="display:flex;gap:6px;flex-wrap:wrap">
-    <input id="symIn" placeholder="Symbol, z. B. AAPL, SAP.DE, BAS.DE" autocomplete="off">
+    <input id="symIn" placeholder="Symbol, z. B. AAPL, SAP.DE, BTC-USD" autocomplete="off">
     <button>Hinzufügen</button>
     <button type="button" class="ghost" id="resetBtn" title="Standardliste wiederherstellen">Standard</button>
   </form>
@@ -846,7 +849,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 <script>
 const DEMO = __DEMO__;
 const INTERVAL = 10;
-const DEFAULT = ["AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","SAP.DE","SIE.DE","ALV.DE","BMW.DE","MBG.DE"];
+const DEFAULT = ["NVDA","AAPL","BTC-USD","MSFT","AMZN","GOOGL","META","TSLA","SAP.DE","SIE.DE"];
 let symbols = load("symbols", DEFAULT);
 let selected = load("selected", null);
 let sortBy = load("sort", "list");

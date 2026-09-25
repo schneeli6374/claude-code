@@ -75,7 +75,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 <header>
   <h1>📈 Aktien-Dashboard<span id="demoTag"></span></h1>
   <form id="addForm" style="display:flex;gap:6px;flex-wrap:wrap">
-    <input id="symIn" placeholder="Symbol, z. B. AAPL, SAP.DE, BAS.DE" autocomplete="off">
+    <input id="symIn" placeholder="Symbol, z. B. AAPL, SAP.DE, BTC-USD" autocomplete="off">
     <button>Hinzufügen</button>
     <button type="button" class="ghost" id="resetBtn" title="Standardliste wiederherstellen">Standard</button>
   </form>
@@ -99,7 +99,7 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 <script>
 let DEMO = load("demo", false);
 const INTERVAL = 10;
-const DEFAULT = ["AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","SAP.DE","SIE.DE","ALV.DE","BMW.DE","MBG.DE"];
+const DEFAULT = ["NVDA","AAPL","BTC-USD","MSFT","AMZN","GOOGL","META","TSLA","SAP.DE","SIE.DE"];
 let symbols = load("symbols", DEFAULT);
 let selected = load("selected", null);
 let sortBy = load("sort", "list");
@@ -391,6 +391,7 @@ const DEMO_NAMES = {
   "AMZN": ["Amazon.com Inc.", "USD", 180], "GOOGL": ["Alphabet Inc.", "USD", 165], "META": ["Meta Platforms Inc.", "USD", 500],
   "TSLA": ["Tesla Inc.", "USD", 240], "SAP.DE": ["SAP SE", "EUR", 200], "SIE.DE": ["Siemens AG", "EUR", 175],
   "ALV.DE": ["Allianz SE", "EUR", 270], "BMW.DE": ["BMW AG", "EUR", 90], "MBG.DE": ["Mercedes-Benz Group AG", "EUR", 65],
+  "BTC-USD": ["Bitcoin USD", "USD", 65000], "ETH-USD": ["Ethereum USD", "USD", 3000],
 };
 const demoState = {};
 function seeded(str){
@@ -725,10 +726,11 @@ function analyze(raw){
   const tip = buildTip(total, sig, price, atrV, pivots, rv, crossNote, raw.currency || "");
 
   const k = Math.min(160, n), tail = a => a.slice(n - k), change = price - prev;
+  const yearAgo = cs[n - 1].t - 365 * 86400, year = cs.filter(x => x.t >= yearAgo);   // Kalendertage (auch für Krypto)
   return {
     symbol: raw.symbol, name: raw.name, currency: raw.currency, exchange: raw.exchange, marketTime: raw.marketTime,
     price, change, changePct: 100 * change / prev, dayHigh: h[n - 1], dayLow: l[n - 1],
-    high52: Math.max(...h.slice(-252)), low52: Math.min(...l.slice(-252)), volume: v[n - 1],
+    high52: Math.max(...year.map(x => x.h)), low52: Math.min(...year.map(x => x.l)), volume: v[n - 1],
     signals: sig, groups, total, tip, pivots,
     chart: {
       dates: cs.slice(n - k).map(x => new Date(x.t * 1000).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "UTC"})),
