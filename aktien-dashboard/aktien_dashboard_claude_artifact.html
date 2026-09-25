@@ -216,7 +216,7 @@ footer.foot{color:var(--muted);font-size:12px;padding-block:28px 36px;text-align
   <div class="hz" role="group" aria-label="Prognose-Zeitraum">
     <span class="eyebrow">Prognose für</span>
     <div class="chips" id="hzChips"></div>
-    <input type="range" id="hzRange" min="5" max="252" step="1" aria-label="Zeitraum in Handelstagen">
+    <input type="range" id="hzRange" min="0" max="23" step="1" aria-label="Prognose-Zeitraum">
     <span class="hzval" id="hzVal"></span>
   </div>
   <div class="opts">
@@ -267,7 +267,9 @@ let sortBy = load("sort", "list");
 let everySec = load("every", 10);
 let chartTab = load("tab", "signal");
 let dTab = load("dtab", "overview");
-let horizon = load("horizon", 21);
+let hz = load("hz2", null) || {u: "d", n: load("horizon", 21)};
+const intra = {}, wantIntra = new Set();
+const INTRA_AGE = 20 * 60 * 1000;   // Stundenkerzen höchstens alle 20 Minuten neu laden
 let data = {}, lastPrice = {}, busy = false, countdown = 0;
 let mcp = null, mode = "start";     // "start" | "live" | "demo"
 let DEMO = false;
@@ -387,6 +389,7 @@ async function loadQuote(sym){
   }
   if (!e.marketOpen) e.nextQuoteAt = Date.now() + CLOSED_GAP;
   recompute(sym);
+  mergeIntraQuote(sym, c.c);
 }
 function recompute(sym){
   const e = store[sym];
@@ -462,6 +465,10 @@ async function tick(force){
       jobs.push(guarded(s, () => loadHistory(s)));
     }
     await Promise.all(jobs);
+    // 1b) Stundenkerzen für Stunden-Prognosen (höchstens eine Abfrage pro Takt)
+    if (symbols.every(s => store[s] && (store[s].candles || store[s].error)) && budgetOK()){
+      const si = nextIntra(); if (si) await guardedIntra(si);
+    }
     // 2) ein Live-Kurs reihum (oder der ausgewählte Wert bei "Jetzt aktualisieren")
     const ready = symbols.every(s => store[s] && (store[s].candles || store[s].error));
     if (ready && budgetOK() && usedToday() < DAY_LIMIT - DAY_RESERVE){
@@ -483,14 +490,105 @@ function hLabel(HT){
   if (HT < 20){ const w = Math.round(HT / 5 * 2) / 2; return (w % 1 ? nf(w, 1) : String(w)) + (w === 1 ? " Woche" : " Wochen"); }
   const m = Math.round(HT / 21 * 2) / 2; return (m % 1 ? nf(m, 1) : String(m)) + (m === 1 ? " Monat" : " Monate");
 }
+function hzLabel(h){
+  if (h.u === "h") return h.n === 1 ? "1 Stunde" : h.n + " Stunden";
+  if (h.n < 5) return h.n === 1 ? "1 Tag" : h.n + " Tage";
+  return hLabel(h.n);
+}
+const hzOrder = h => h.u === "h" ? h.n : 100 + h.n;
+const sameHz = (a, b) => a.u === b.u && a.n === b.n;
+function fcFor(sym, h = hz){
+  const d = data[sym]; if (!d || d.error) return null;
+  if (h.u === "d") return forecast(d, h.n);
+  const a = intra[sym] && intra[sym].analysis;
+  return a ? forecastBars(a, h.n) : null;
+}
+function intraMsg(sym){ const it = intra[sym]; return it && it.error ? "Stundenkerzen nicht verfügbar: " + it.error : "lädt Stundenkerzen …"; }
+
+// ---------------------------------------------------------------------
+// Stundenkerzen für Prognosen bis hinunter zu 1 Stunde
+// ---------------------------------------------------------------------
+const dtTs = s => Date.parse(String(s).length > 10 ? String(s).replace(" ", "T") + "Z" : String(s) + "T00:00:00Z") / 1000;
+function intraWanted(s){ return hz.u === "h" || wantIntra.has(s); }
+function recomputeIntra(sym){
+  const it = intra[sym]; if (!it || !it.candles) return;
+  const e = store[sym] || {}, dd = data[sym] || {};
+  try{
+    const a = analyze({symbol: sym, name: e.name || dd.name || NAMES[sym] || sym, currency: e.currency || dd.currency || guessCur(sym), exchange: e.exchange || "",
+      marketTime: it.candles[it.candles.length - 1].t, candles: it.candles, intraday: true});
+    a.crypto = isCrypto(sym); it.analysis = a;
+  }catch(err){ it.error = "Auswertung fehlgeschlagen: " + err.message; it.analysis = null; }
+}
+async function loadIntraday(sym){
+  const it = intra[sym] = intra[sym] || {};
+  const text = await td("get_time_series", {...tdArgs(sym), interval: "1h", outputsize: 1000});
+  const candles = parseCSV(text).reverse()
+    .map(r => ({t: dtTs(r.datetime), o: +r.open, h: +r.high, l: +r.low, c: +r.close, v: +(r.volume || 0)}))
+    .filter(c => [c.t, c.o, c.h, c.l, c.c].every(isFinite));
+  if (candles.length < 60) throw apiError("Zu wenig Stundenkerzen");
+  it.candles = candles; it.fetchedAt = Date.now(); it.error = null;
+  save("h1_" + sym, {fetchedAt: it.fetchedAt, candles});
+  recomputeIntra(sym);
+}
+async function guardedIntra(s){
+  const it = intra[s] = intra[s] || {};
+  it.loading = true;
+  try{ await loadIntraday(s); transient = ""; }
+  catch(e){
+    if (e && e.code === "api"){ if (e.kind !== "minute" && e.kind !== "day") it.error = e.kind === "plan" ? planMsg(s) : e.message; }
+    else handleError(s, e);
+  }finally{ it.loading = false; }
+}
+function nextIntra(){
+  const order = selected ? [selected, ...symbols.filter(x => x !== selected)] : symbols;
+  const now = Date.now();
+  for (const s of order){
+    if (!intraWanted(s) || !store[s] || !store[s].candles) continue;
+    const it = intra[s] = intra[s] || {};
+    if (it.loading || it.error) continue;
+    if (!it.candles){
+      const cached = load("h1_" + s, null);
+      if (cached && now - cached.fetchedAt < INTRA_AGE){ it.candles = cached.candles; it.fetchedAt = cached.fetchedAt; recomputeIntra(s); continue; }
+    }
+    let maxAge = s === selected ? 10 * 60 * 1000 : INTRA_AGE;
+    if (!isCrypto(s) && store[s].marketOpen === false) maxAge = 60 * 60 * 1000;   // Börse zu: seltener
+    if (!it.fetchedAt || now - it.fetchedAt > maxAge) return s;
+  }
+  return null;
+}
+// Live-Kurs in die letzte Stundenkerze übernehmen
+function mergeIntraQuote(sym, price){
+  const it = intra[sym], e = store[sym];
+  if (!it || !it.candles || !isFinite(price)) return;
+  if (!isCrypto(sym) && e && e.marketOpen === false) return;
+  const lc = it.candles[it.candles.length - 1];
+  lc.c = price; lc.h = Math.max(lc.h, price); lc.l = Math.min(lc.l, price);
+  recomputeIntra(sym);
+}
+const demoIntraState = {};
+function demoIntraRaw(sym){
+  if (!demoIntraState[sym]){
+    const r = seeded(sym + "#h"), t0 = Math.floor(Date.now() / 3600000) * 3600 - 999 * 3600, cs = [];
+    let p = 1;
+    for (let i = 0; i < 1000; i++){
+      const o = p; p *= Math.exp(gauss(r) * 0.007);
+      cs.push({t: t0 + i * 3600, o, c: p, h: Math.max(o, p) * (1 + Math.abs(gauss(r)) * 0.002), l: Math.min(o, p) * (1 - Math.abs(gauss(r)) * 0.002), v: Math.floor(2e5 + r() * 8e5)});
+    }
+    demoIntraState[sym] = cs;
+  }
+  const cs = demoIntraState[sym], end = demoState[sym] ? demoState[sym].candles[demoState[sym].candles.length - 1].c : 100, f = end / cs[cs.length - 1].c;
+  return cs.map(c => ({...c, o: c.o * f, h: c.h * f, l: c.l * f, c: c.c * f}));
+}
 const bucket = s => (s >= 0 ? 1 : -1) * (Math.abs(s) >= 0.35 ? 3 : Math.abs(s) >= 0.12 ? 2 : 1);
 function quant(a, p){ const s = a.slice().sort((x, y) => x - y), i = (s.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); }
 const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
-function forecast(d, HT){
+// Tages-Zeitraum (Handelstage) -> Anzahl Kerzen; Krypto handelt auch am Wochenende
+function forecast(d, HT){ return forecastBars(d, d.crypto ? Math.round(HT * 365 / 252) : HT); }
+function forecastBars(d, H){
   d._fc = d._fc || {};
-  if (d._fc[HT]) return d._fc[HT];
+  if (d._fc[H]) return d._fc[H];
   const F = d.F, c = F.c, n = c.length, sc = F.score, sd = F.sd;
-  const H = d.crypto ? Math.round(HT * 365 / 252) : HT, sdNow = sd[n - 1] || 0.02;
+  const sdNow = sd[n - 1] || 0.02;
   const cur = sc[n - 1] != null ? sc[n - 1] : 0, b0 = d.total.dir * Math.abs(bucket(cur || 1e-9));
   const all = [], sim = [];
   for (let i = Math.max(F.start, 0); F.start >= 0 && i + H < n; i++){
@@ -507,12 +605,12 @@ function forecast(d, HT){
   const emp = (fn, dflt) => all.length ? wS * (wS ? fn(sim) : 0) + (1 - wS) * fn(all) : dflt;
   const exp = wA * emp(mean, 0);
   const band = z => Math.exp(Math.log(1 + exp) + z * sdNow * Math.sqrt(H)) - 1;  // normale Schwankung um die Erwartung
-  const res = {H, HT, n: all.length, nSim: sim.length, w: wS, wA, exp,
+  const res = {H, n: all.length, nSim: sim.length, w: wS, wA, exp,
     pUp: wA * emp(pu, 0.5) + (1 - wA) * 0.5,
     lo: Math.min(exp, wA * emp(a => quant(a, 0.1), 0) + (1 - wA) * band(-1.2816)),
     hi: Math.max(exp, wA * emp(a => quant(a, 0.9), 0) + (1 - wA) * band(1.2816)),
     few: effAll < 12, acc: all.length >= 40 ? fcAccuracy(F, H) : null};
-  d._fc[HT] = res;
+  d._fc[H] = res;
   return res;
 }
 // Rückblick: Wie oft lag die Prognose-Richtung früher richtig? (nur mit damals bekannten Daten)
@@ -538,7 +636,7 @@ function updateNote(){
   if (mode === "demo") return;
   $("#note").innerHTML = `<b>Echte Kurse von Twelve Data.</b> Alle ${everySec} s wird reihum ein Wert aktualisiert · heute <b class="num">${usedToday()}</b> von ${DAY_LIMIT} Abfragen genutzt ·
     <details><summary>So funktioniert es</summary><span class="more">Dein kostenloser Tarif erlaubt 800 Abfragen pro Tag und 8 pro Minute. Deshalb wird reihum ein Wert aktualisiert, jeder höchstens einmal pro Minute,
-    bei geschlossener Börse nur alle 15 Minuten. Die Kurshistorie (etwa 4 Jahre) wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten, SAP gibt es aber über die Börse New York.</span></details>`;
+    bei geschlossener Börse nur alle 15 Minuten. Die Kurshistorie (etwa 4 Jahre) wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten, SAP gibt es aber über die Börse New York. Für Stunden-Prognosen werden zusätzlich Stundenkerzen geladen: 1 Abfrage je Wert, höchstens alle 20 Minuten und nur, wenn ein Stunden-Zeitraum gewählt ist.</span></details>`;
 }
 function updateBanner(){
   let txt = "", demoBtn = false;
@@ -591,7 +689,7 @@ function cardHTML(s){
   const d = data[s];
   if (!d) return `<div class="card pending" data-s="${esc(s)}"><div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div><div class="nm">${esc(NAMES[s] || "")}</div></div>${rmBtn(s)}</div><div class="wait">wartet auf Kursdaten …</div></div>`;
   if (d.error) return `<div class="card err" data-s="${esc(s)}"><div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div></div>${rmBtn(s)}</div><div class="errtxt">${esc(d.error)}</div></div>`;
-  const f = forecast(d, horizon);
+  const f = fcFor(s);
   let flash = "";
   if (lastPrice[s] != null && lastPrice[s] !== d.price) flash = d.price > lastPrice[s] ? "flash-up" : "flash-down";
   lastPrice[s] = d.price;
@@ -600,7 +698,7 @@ function cardHTML(s){
       <div class="c-right"><span class="pill ${pillCls(d.total.label)}">${esc(d.total.label)}</span>${rmBtn(s)}</div></div>
     <div class="c-price"><span class="px num">${nf(d.price)}</span><span class="cur">${esc(d.currency)}</span><span class="chg num ${d.change >= 0 ? "up" : "down"}">${sp(d.changePct / 100, 2)}</span></div>
     <canvas class="spark" data-spark="${esc(s)}" aria-hidden="true"></canvas>
-    <div class="fc"><span>Prognose ${esc(hLabel(horizon))}</span><span><b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp)}</b> <span class="muted">· Anstieg ${pc(f.pUp)}</span></span></div>
+    <div class="fc"><span>Prognose ${esc(hzLabel(hz))}</span>${f ? `<span><b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b> <span class="muted">· Anstieg ${pc(f.pUp)}</span></span>` : `<span class="muted">${esc(intraMsg(s))}</span>`}</div>
     <div class="meta"><span>Stärke ${d.total.strength} % · Verlässlichkeit ${esc(d.total.reliability)}</span><span>${esc(whenTxt(d))}</span></div>
   </div>`;
 }
@@ -608,15 +706,15 @@ function renderSummary(){
   const ds = symbols.filter(ready).map(s => data[s]);
   if (!ds.length){ $("#summary").innerHTML = ""; return; }
   const nb = ds.filter(d => d.total.dir > 0).length, ns = ds.length - nb;
-  const fcs = ds.map(d => [d, forecast(d, horizon)]).sort((a, b) => b[1].exp - a[1].exp);
-  const [bd, bf] = fcs[0], [wd, wf] = fcs[fcs.length - 1];
-  const t = (label, d, f) => `<div class="tile" data-open="${esc(d.symbol)}" role="button" tabindex="0"><div class="eyebrow">${label} · ${esc(hLabel(horizon))}</div>
-    <div class="t-val">${esc(d.symbol)} <b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp)}</b></div><div class="t-sub">${esc(d.name)} · Anstieg ${pc(f.pUp)}</div></div>`;
+  const fcs = ds.map(d => [d, fcFor(d.symbol)]).filter(x => x[1]).sort((a, b) => b[1].exp - a[1].exp);
+  const bdf = fcs[0], wdf = fcs[fcs.length - 1];
+  const t = (label, d, f) => `<div class="tile" data-open="${esc(d.symbol)}" role="button" tabindex="0"><div class="eyebrow">${label} · ${esc(hzLabel(hz))}</div>
+    <div class="t-val">${esc(d.symbol)} <b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b></div><div class="t-sub">${esc(d.name)} · Anstieg ${pc(f.pUp)}</div></div>`;
   $("#summary").innerHTML = `
     <div class="tile"><div class="eyebrow">Signale in deiner Liste</div>
       <div class="t-val"><span class="up">${nb} × Kaufen</span> · <span class="down">${ns} × Verkaufen</span></div>
       <div class="sbar" style="display:flex"><i style="width:${100 * nb / ds.length}%;background:var(--up)"></i><i style="width:${100 * ns / ds.length}%;background:var(--down)"></i></div></div>
-    ${t("Beste Prognose", bd, bf)}${fcs.length > 1 ? t("Schwächste Prognose", wd, wf) : ""}
+    ${bdf ? t("Beste Prognose", bdf[0], bdf[1]) : `<div class="tile"><div class="eyebrow">Prognose · ${esc(hzLabel(hz))}</div><div class="t-val muted">lädt Stundenkerzen …</div></div>`}${fcs.length > 1 ? t("Schwächste Prognose", wdf[0], wdf[1]) : ""}
     <div class="tile"><div class="eyebrow">${mode === "demo" ? "Datenquelle" : "Twelve Data heute"}</div>
       <div class="t-val num">${mode === "demo" ? "Simulation" : usedToday() + " / " + DAY_LIMIT}</div><div class="t-sub">${mode === "demo" ? "keine echten Kurse" : "Abfragen verbraucht"}</div></div>`;
 }
@@ -625,14 +723,16 @@ function renderOverview(){
   const val = (s, f, d) => ready(s) ? f(data[s]) : d;
   if (sortBy === "score") list.sort((a, b) => val(b, x => x.total.score, -9) - val(a, x => x.total.score, -9));
   if (sortBy === "chg") list.sort((a, b) => val(b, x => x.changePct, -999) - val(a, x => x.changePct, -999));
-  if (sortBy === "fc") list.sort((a, b) => val(b, x => forecast(x, horizon).exp, -9) - val(a, x => forecast(x, horizon).exp, -9));
+  const fcv = s => { const f = fcFor(s); return f ? f.exp : -9; };
+  if (sortBy === "fc") list.sort((a, b) => fcv(b) - fcv(a));
   renderSummary();
   $("#grid").innerHTML = list.map(cardHTML).join("");
   document.querySelectorAll("canvas[data-spark]").forEach(cv => {
     const s = cv.dataset.spark, d = data[s]; if (!ready(s)) return;
-    const c = d.chart.c.slice(-60), f = forecast(d, horizon), p = d.price;
+    const ia = hz.u === "h" && intra[s] ? intra[s].analysis : null, src = ia || d;
+    const c = src.chart.c.slice(-60), f = fcFor(s), p = src.price;
     drawChart(cv, {n: c.length, series: [{v: c, color: c[c.length - 1] >= c[0] ? "--up" : "--down", w: 1.6, fill: true}],
-      cone: {slots: 16, p0: p, lo: p * (1 + f.lo), hi: p * (1 + f.hi), mid: p * (1 + f.exp)}, pad: [4, 4, 4, 2], noAxis: true});
+      cone: f ? {slots: 16, p0: p, lo: p * (1 + f.lo), hi: p * (1 + f.hi), mid: p * (1 + f.exp)} : null, extra: f ? 0 : 16, pad: [4, 4, 4, 2], noAxis: true});
   });
 }
 function render(){
@@ -647,14 +747,17 @@ function render(){
 // Detailseite
 // ---------------------------------------------------------------------
 function renderDetail(){
-  const d = data[selected], t = d.tip, R = d.reliability, f = forecast(d, horizon), up = d.total.dir > 0;
+  const d = data[selected], t = d.tip, R = d.reliability, up = d.total.dir > 0;
+  const isH = hz.u === "h", ia = isH && intra[selected] ? intra[selected].analysis : null, cd = ia || d;
+  const f0 = fcFor(selected), f = f0 || {exp: null, pUp: null, lo: null, hi: null, acc: null};
+  const closed = isH && !d.crypto && d.marketOpen === false;
   const time = d.marketTime ? new Date(d.marketTime * 1000).toLocaleString("de-DE") : "";
-  const conflict = Math.sign(f.exp) !== d.total.dir && Math.abs(f.exp) > 0.002;
+  const conflict = !isH && f0 && Math.sign(f.exp) !== d.total.dir && Math.abs(f.exp) > 0.002;
   const tabs = [["overview", "Übersicht"], ["forecast", "Prognose"], ["ind", `Indikatoren (${d.signals.length})`], ["back", "Rückblick & Kennzahlen"]];
   let body = "";
   if (dTab === "overview"){
     body = `<div class="cols"><div>
-      <div class="panel"><h3>Kursverlauf und Prognose (${esc(hLabel(horizon))})</h3>
+      <div class="panel"><h3>${ia ? "Stundenkerzen" : "Tageskerzen"} und Prognose (${esc(hzLabel(hz))})</h3>${isH && !ia ? `<div class="fine" style="margin:-4px 0 8px">${esc(intraMsg(selected))} Bis dahin: Tageskerzen.</div>` : ""}
         <div class="legend"><span><i style="background:var(--c-sma20)"></i>SMA 20</span><span><i style="background:var(--c-sma50)"></i>SMA 50</span>
           <span><i style="background:var(--c-sma200)"></i>SMA 200</span><span><i style="background:var(--c-band-line)"></i>Bollinger</span><span><i style="background:var(--accent)"></i>Prognose mit 80 %-Spanne</span></div>
         <canvas class="chart" id="cMain" style="height:340px"></canvas>
@@ -662,7 +765,7 @@ function renderDetail(){
       <div class="panel">
         <div class="subtabs">${[["signal", "Gesamtsignal"], ["rsi", "RSI (14)"], ["macd", "MACD"], ["stoch", "Stochastik"]].map(([k, l]) => `<button type="button" data-ctab="${k}" class="${chartTab === k ? "on" : ""}">${l}</button>`).join("")}</div>
         <canvas class="chart" id="cInd" style="height:150px"></canvas>
-        ${chartTab === "signal" ? '<div class="fine">Über 0 = Kaufsignal, unter 0 = Verkaufssignal, Tag für Tag gleich berechnet wie heute.</div>' : ""}</div>
+        ${chartTab === "signal" ? `<div class="fine">Über 0 = Kaufsignal, unter 0 = Verkaufssignal, ${ia ? "Stunde für Stunde" : "Tag für Tag"} gleich berechnet wie jetzt.</div>` : ""}</div>
     </div><div>
       <div class="panel tip"><h3>Tipp</h3>
         <p class="evid">${esc(t.evidence)}</p>
@@ -674,26 +777,34 @@ function renderDetail(){
         <div class="fine">Keine Anlageberatung. Frühere Trefferquoten sind keine Garantie.</div></div>
     </div></div>`;
   } else if (dTab === "forecast"){
-    const rows = HORIZONS.map(([, h]) => h);
-    if (!rows.includes(horizon)) rows.push(horizon);
-    rows.sort((a, b) => a - b);
-    const fs = rows.map(h => [h, forecast(d, h)]), span = Math.max(0.05, ...fs.map(([, x]) => Math.max(Math.abs(x.lo), Math.abs(x.hi))));
-    const xp = v => (50 + 50 * v / span).toFixed(1);
-    body = `<div class="panel"><h3>Prognose für verschiedene Zeiträume</h3><div class="tablewrap"><table class="fct">
+    const iaF = intra[selected] && intra[selected].analysis, list = [], hs = [1, 2, 4, 6], dsn = [1, 5, 10, 21, 63, 126, 252];
+    if (iaF){ hs.forEach(n => list.push([{u: "h", n}, forecastBars(iaF, n)])); if (hz.u === "h" && !hs.includes(hz.n)) list.push([hz, forecastBars(iaF, hz.n)]); }
+    dsn.forEach(n => list.push([{u: "d", n}, forecast(d, n)]));
+    if (hz.u === "d" && !dsn.includes(hz.n)) list.push([hz, forecast(d, hz.n)]);
+    list.sort((a, b) => hzOrder(a[0]) - hzOrder(b[0]));
+    const xp = (v, S) => (50 + 50 * v / S).toFixed(1), it = intra[selected];
+    body = `<div class="panel"><h3>Prognose für verschiedene Zeiträume</h3>
+      ${iaF ? "" : `<div class="plan">Für Stunden-Prognosen braucht die Seite Stundenkerzen (1 Twelve-Data-Abfrage).
+        <button class="btn" type="button" data-intra="1">Stundenkerzen laden</button>
+        ${it && it.error ? `<div class="errtxt">${esc(it.error)}</div>` : wantIntra.has(selected) || hz.u === "h" ? `<span class="muted"> wird geladen …</span>` : ""}</div>`}
+      <div class="tablewrap"><table class="fct">
       <thead><tr><th>Zeitraum</th><th>Erwartet</th><th>Anstieg</th><th>80 %-Spanne</th><th>Spanne (grafisch)</th><th>Kurs ca.</th><th title="Wie oft die Richtung dieser Prognose früher gestimmt hat">Früher richtig</th></tr></thead><tbody>
-      ${fs.map(([h, x]) => `<tr class="${h === horizon ? "cur-h" : ""}"><td><b>${esc(hLabel(h))}</b>${x.few ? ' <span class="muted" title="wenig unabhängige Vergleichsfälle">*</span>' : ""}</td>
-        <td class="v ${x.exp >= 0 ? "up" : "down"}"><b>${sp(x.exp)}</b></td><td class="v">${pc(x.pUp)}</td>
-        <td class="v">${sp(x.lo, 0)} bis ${sp(x.hi, 0)}</td>
-        <td><div class="rbar"><span class="zero" style="left:50%"></span><span class="rng" style="left:${xp(x.lo)}%;width:${(xp(x.hi) - xp(x.lo)).toFixed(1)}%"></span><span class="exp" style="left:${xp(x.exp)}%;background:${x.exp >= 0 ? "var(--up)" : "var(--down)"}"></span></div></td>
-        <td class="v">${nf(d.price * (1 + x.exp))}</td>
-        <td class="v">${x.acc ? `${pc(x.acc.hit)} <span class="muted">(Basis ${pc(x.acc.base)})</span>` : "–"}</td></tr>`).join("")}
+      ${list.map(([h, x]) => { const S = Math.max(0.002, Math.abs(x.lo), Math.abs(x.hi)), base = h.u === "h" ? iaF.price : d.price, dg = h.u === "h" ? 2 : 1;
+        return `<tr class="${sameHz(h, hz) ? "cur-h" : ""}"><td><b>${esc(hzLabel(h))}</b>${x.few ? ' <span class="muted" title="wenig unabhängige Vergleichsfälle">*</span>' : ""}</td>
+        <td class="v ${x.exp >= 0 ? "up" : "down"}"><b>${sp(x.exp, dg)}</b></td><td class="v">${pc(x.pUp)}</td>
+        <td class="v">${sp(x.lo, dg - 1)} bis ${sp(x.hi, dg - 1)}</td>
+        <td><div class="rbar"><span class="zero" style="left:50%"></span><span class="rng" style="left:${xp(x.lo, S)}%;width:${(xp(x.hi, S) - xp(x.lo, S)).toFixed(1)}%"></span><span class="exp" style="left:${xp(x.exp, S)}%;background:${x.exp >= 0 ? "var(--up)" : "var(--down)"}"></span></div></td>
+        <td class="v">${nf(base * (1 + x.exp))}</td>
+        <td class="v">${x.acc ? `${pc(x.acc.hit)} <span class="muted">(Basis ${pc(x.acc.base)})</span>` : "–"}</td></tr>`; }).join("")}
       </tbody></table></div>
-      <div class="fine">* Wenige unabhängige Vergleichszeiträume: Die Prognose wurde deshalb stark in Richtung „kein Trend“ gezogen und ist besonders unsicher. „Früher richtig“ erscheint nur bei genug unabhängigen Zeiträumen. „Basis“ = Trefferquote, wenn man einfach immer die häufigere Richtung vorhergesagt hätte.</div></div>
+      <div class="fine">* Wenige unabhängige Vergleichszeiträume: Die Prognose wurde deshalb stark in Richtung „kein Trend“ gezogen und ist besonders unsicher. „Früher richtig“ erscheint nur bei genug unabhängigen Zeiträumen,
+      „Basis“ ist die Quote, wenn man immer die häufigere Richtung vorhergesagt hätte. Die grafische Spanne ist je Zeile skaliert. Stunden sind Handelsstunden (bei Aktien ohne Nacht und Wochenende).</div></div>
       <div class="panel"><h3>So entsteht die Prognose</h3><div class="evid" style="font-size:14px;max-width:80ch">
-        Für jeden Tag der letzten Jahre wird nachgesehen, wie sich der Kurs im gewählten Zeitraum danach entwickelt hat. Tage mit einem ähnlichen Signal wie heute
-        (gleiche Richtung und Stärke) zählen besonders. Die früheren Bewegungen werden an die heutige Schwankungsstärke angepasst: Ist die Aktie gerade unruhiger als früher, wird die Spanne breiter.
-        Gibt es wenige ähnliche Fälle, rückt die Prognose näher an den allgemeinen Durchschnitt der Aktie.
-        „Früher richtig“ zeigt, wie oft die vorhergesagte Richtung gestimmt hat, wenn man die Prognose Tag für Tag nur mit den damals bekannten Daten gemacht hätte.
+        Für jeden Zeitpunkt der Vergangenheit wird nachgesehen, wie sich der Kurs im gewählten Zeitraum danach entwickelt hat: bei Tagen mit Tageskerzen (etwa 4 Jahre),
+        bei Stunden mit Stundenkerzen (etwa 1000 Handelsstunden). Zeitpunkte mit einem ähnlichen Signal wie jetzt zählen besonders.
+        Die früheren Bewegungen werden an die heutige Schwankungsstärke angepasst: Ist die Aktie gerade unruhiger als früher, wird die Spanne breiter.
+        Gibt es wenige unabhängige Vergleichsfälle, rückt die Prognose in Richtung „kein Trend“.
+        „Früher richtig“ zeigt, wie oft die vorhergesagte Richtung gestimmt hat, wenn man die Prognose Schritt für Schritt nur mit den damals bekannten Daten gemacht hätte.
       </div></div>`;
   } else if (dTab === "ind"){
     const bygroup = {};
@@ -736,21 +847,25 @@ function renderDetail(){
           <div><span class="eyebrow">Signalstärke</span><b>${d.total.strength} %</b><div class="sbar"><i style="width:${d.total.strength}%;background:${up ? "var(--up)" : "var(--down)"}"></i></div></div>
           <div><span class="eyebrow">Verlässlichkeit</span><b>${esc(R.label)}</b><small>${R.hitRate != null ? pc(R.hitRate) + " Treffer bei ähnlichen Signalen" : "zu wenig Daten"}</small></div>
         </div></div>
-      <div class="h-fc"><div class="eyebrow">Prognose · ${esc(hLabel(horizon))}</div>
-        <div class="big ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp)}</div>
-        <div class="row"><span>Kurs ca.</span><b class="num">${nf(d.price * (1 + f.exp))} ${esc(d.currency)}</b></div>
+      <div class="h-fc"><div class="eyebrow">Prognose · ${esc(hzLabel(hz))}${ia ? " · aus Stundenkerzen" : ""}</div>
+        ${f0 ? `<div class="big ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, isH ? 2 : 1)}</div>
+        <div class="row"><span>Kurs ca.</span><b class="num">${nf(cd.price * (1 + f.exp))} ${esc(d.currency)}</b></div>
         <div class="row"><span>Wahrscheinlichkeit Anstieg</span><b class="num">${pc(f.pUp)}</b></div>
-        <div class="row"><span>80 %-Spanne</span><b class="num">${nf(d.price * (1 + f.lo))} – ${nf(d.price * (1 + f.hi))}</b></div>
-        <div class="row"><span>Richtung früher richtig</span><b class="num">${f.acc ? pc(f.acc.hit) : "–"}</b></div></div>
+        <div class="row"><span>80 %-Spanne</span><b class="num">${nf(cd.price * (1 + f.lo))} – ${nf(cd.price * (1 + f.hi))}</b></div>
+        <div class="row"><span>Richtung früher richtig</span><b class="num">${f.acc ? pc(f.acc.hit) : "–"}</b></div>
+        ${ia ? `<div class="row"><span>Kurzfrist-Signal (Stunden)</span><span class="pill ${pillCls(ia.total.label)}">${esc(ia.total.label)}</span></div>` : ""}
+        ${closed ? `<div class="fine">Die Börse ist gerade geschlossen: Die Prognose gilt ab der nächsten Handelsstunde.</div>` : ""}`
+        : `<div class="big muted" style="font-size:20px">${esc(intraMsg(selected))}</div><div class="fine">Stundenkerzen kosten eine Twelve-Data-Abfrage je Wert und werden höchstens alle 20 Minuten neu geladen.</div>`}
+      </div>
     </div>
     <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" class="tab ${dTab === k ? "on" : ""}" aria-selected="${dTab === k}" data-dtab="${k}">${l}</button>`).join("")}</div>
     ${body}`;
   if (dTab === "overview"){
-    const ch = d.chart, n = ch.c.length, p = d.price;
+    const ch = cd.chart, n = ch.c.length, p = cd.price, slots = f0 ? Math.round(n * 0.22) : 0;
     drawChart($("#cMain"), {n, candles: ch, band: [ch.bbu, ch.bbl],
       series: [{v: ch.sma20, color: "--c-sma20", w: 1}, {v: ch.sma50, color: "--c-sma50", w: 1.5}, {v: ch.sma200, color: "--c-sma200", w: 1.5}],
-      lastLine: p, dates: ch.dates, cone: {slots: Math.round(n * 0.22), p0: p, lo: p * (1 + f.lo), hi: p * (1 + f.hi), mid: p * (1 + f.exp), label: sp(f.exp) + " in " + hLabel(horizon)}});
-    drawChart($("#cVol"), {n, bars: ch.v.map((v, i) => ({v, color: ch.c[i] >= ch.o[i] ? "--up" : "--down"})), barAlpha: 0.45, zeroBase: true, noAxis: true, pad: [4, 56, 2, 4], extra: Math.round(n * 0.22)});
+      lastLine: p, dates: ch.dates, cone: f0 ? {slots, p0: p, lo: p * (1 + f.lo), hi: p * (1 + f.hi), mid: p * (1 + f.exp), label: sp(f.exp, isH ? 2 : 1) + " in " + hzLabel(hz)} : null});
+    drawChart($("#cVol"), {n, bars: ch.v.map((v, i) => ({v, color: ch.c[i] >= ch.o[i] ? "--up" : "--down"})), barAlpha: 0.45, zeroBase: true, noAxis: true, pad: [4, 56, 2, 4], extra: slots});
     if (chartTab === "signal") drawChart($("#cInd"), {n, bars: ch.score.map(v => ({v, color: v >= 0 ? "--up" : "--down"})), barAlpha: 0.75, hlines: [[0, "--chart-text"]]});
     if (chartTab === "rsi") drawChart($("#cInd"), {n, series: [{v: ch.rsi, color: "--c-sma50", w: 1.5}], hlines: [[70, "--down"], [30, "--up"], [50, "--chart-grid"]], yMin: 0, yMax: 100});
     if (chartTab === "macd") drawChart($("#cInd"), {n, series: [{v: ch.macd, color: "--c-sma20", w: 1.5}, {v: ch.msig, color: "--c-sma50", w: 1.2}],
@@ -785,6 +900,7 @@ $("#detail").addEventListener("click", e => {
   if (e.target.closest("#backBtn")) return closeDetail();
   if (e.target.closest("#rmDetail")) return removeSym(selected);
   const dt = e.target.closest("[data-dtab]"); if (dt){ dTab = dt.dataset.dtab; save("dtab", dTab); renderDetail(); return; }
+  if (e.target.closest("[data-intra]")){ wantIntra.add(selected); if (mode === "demo") demoTick(); else { render(); tick(); } return; }
   const ct = e.target.closest("[data-ctab]"); if (ct){ chartTab = ct.dataset.ctab; save("tab", chartTab); renderDetail(); }
 });
 $("#addForm").addEventListener("submit", e => {
@@ -802,19 +918,26 @@ $("#sortSel").value = sortBy;
 $("#sortSel").onchange = e => { sortBy = e.target.value; save("sort", sortBy); render(); };
 $("#everySel").value = String(everySec);
 $("#everySel").onchange = e => { everySec = +e.target.value; save("every", everySec); countdown = Math.min(countdown, everySec); updateNote(); };
-function setHorizon(h, fromRange){
-  horizon = Math.max(5, Math.min(252, Math.round(h))); save("horizon", horizon);
-  if (!fromRange) $("#hzRange").value = horizon;
-  $("#hzVal").textContent = hLabel(horizon);
-  document.querySelectorAll("#hzChips .chip").forEach(b => b.classList.toggle("on", +b.dataset.h === horizon));
-  render();
+const HZ_STEPS = ["h1","h2","h3","h4","h5","h6","d1","d2","d3","d4","d5","d7","d10","d15","d21","d30","d42","d63","d84","d105","d126","d168","d210","d252"].map(k => ({u: k[0], n: +k.slice(1)}));
+const HZ_CHIPS = [["1 Std", "h1"], ["4 Std", "h4"], ["1 T", "d1"], ["1 W", "d5"], ["1 M", "d21"], ["3 M", "d63"], ["6 M", "d126"], ["1 J", "d252"]];
+const hzKey = h => h.u + h.n;
+function stepIndex(h){ let best = 0, bd = Infinity; HZ_STEPS.forEach((x, i) => { const dd = Math.abs(hzOrder(x) - hzOrder(h)); if (dd < bd){ bd = dd; best = i; } }); return best; }
+function syncHzUi(fromRange){
+  if (!fromRange) $("#hzRange").value = stepIndex(hz);
+  $("#hzVal").textContent = hzLabel(hz);
+  document.querySelectorAll("#hzChips .chip").forEach(b => b.classList.toggle("on", b.dataset.k === hzKey(hz)));
 }
-$("#hzChips").innerHTML = HORIZONS.map(([l, h]) => `<button type="button" class="chip" data-h="${h}" title="${hLabel(h)}">${l}</button>`).join("");
-$("#hzChips").addEventListener("click", e => { const b = e.target.closest(".chip"); if (b) setHorizon(+b.dataset.h); });
+function setHz(h, fromRange){
+  hz = {u: h.u, n: h.n}; save("hz2", hz); syncHzUi(fromRange);
+  if (mode === "demo" && hz.u === "h") demoTick(); else render();
+  if (mode === "live" && hz.u === "h" && !busy) tick();
+}
+$("#hzRange").min = 0; $("#hzRange").max = HZ_STEPS.length - 1;
+$("#hzChips").innerHTML = HZ_CHIPS.map(([l, k]) => `<button type="button" class="chip" data-k="${k}" title="${hzLabel({u: k[0], n: +k.slice(1)})}">${l}</button>`).join("");
+$("#hzChips").addEventListener("click", e => { const b = e.target.closest(".chip"); if (b) setHz({u: b.dataset.k[0], n: +b.dataset.k.slice(1)}); });
 let hzRaf = 0;
-$("#hzRange").addEventListener("input", e => { const v = +e.target.value; cancelAnimationFrame(hzRaf); hzRaf = requestAnimationFrame(() => setHorizon(v, true)); });
-$("#hzRange").value = horizon; $("#hzVal").textContent = hLabel(horizon);
-document.querySelectorAll("#hzChips .chip").forEach(b => b.classList.toggle("on", +b.dataset.h === horizon));
+$("#hzRange").addEventListener("input", e => { const i = +e.target.value; cancelAnimationFrame(hzRaf); hzRaf = requestAnimationFrame(() => setHz(HZ_STEPS[i], true)); });
+syncHzUi();
 // Farbschema wechselt -> Diagramme neu zeichnen
 try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render()); }catch(e){}
 new MutationObserver(() => render()).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
@@ -828,7 +951,10 @@ function startDemo(reason){
   countdown = 10; demoTick();
 }
 function demoTick(){
-  for (const s of symbols){ try{ data[s] = analyze(demoRaw(s)); data[s].crypto = isCrypto(s); }catch(e){ data[s] = {symbol: s, error: e.message}; } }
+  for (const s of symbols){
+    try{ data[s] = analyze(demoRaw(s)); data[s].crypto = isCrypto(s); }catch(e){ data[s] = {symbol: s, error: e.message}; }
+    if (intraWanted(s) && data[s] && !data[s].error){ intra[s] = {candles: demoIntraRaw(s), fetchedAt: Date.now()}; recomputeIntra(s); }
+  }
   render();
 }
 
@@ -1432,7 +1558,8 @@ function analyze(raw){
     high52: Math.max(...year.map(x => x.h)), low52: Math.min(...year.map(x => x.l)), volume: v[I],
     signals: sig, groups, total: tot2, tip, pivots, reliability, crypto, F: {c, score, sd: hv, start},
     chart: {
-      dates: cs.slice(n - k).map(x => new Date(x.t * 1000).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "UTC"})),
+      dates: cs.slice(n - k).map(x => raw.intraday ? new Date(x.t * 1000).toISOString().replace(/^\d{4}-(\d\d)-(\d\d)T(\d\d:\d\d).*$/, "$2.$1. $3")
+      : new Date(x.t * 1000).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "UTC"})),
       o: tail(o), h: tail(h), l: tail(l), c: tail(c), sma20: tail(mid), sma50: tail(s50), sma200: tail(s200),
       bbu: tail(bbu), bbl: tail(bbl), rsi: tail(r), macd: tail(macd), msig: tail(msig), mhist: tail(mhist),
       stk: tail(kS), std: tail(dS), v: tail(v), score: tail(score),
@@ -1516,7 +1643,10 @@ function drawChart(cv, o){
       x.beginPath(); x.moveTo(pl, y); x.lineTo(W - pr, y); x.stroke();
       x.fillText(nf(v, Math.abs(hi) < 10 ? 2 : Math.abs(hi) < 1000 ? 1 : 0), W - pr + 6, y + 4);
     }
-    if (o.dates){ const step = Math.ceil(o.n / 5); for (let i = 0; i < o.n; i += step) x.fillText(o.dates[i], Math.min(Math.max(pl, X(i) - 24), W - pr - 56), H - 5); }
+    if (o.dates){
+      const lw = Math.max(...o.dates.map(t => x.measureText(t).width)) + 14, maxL = Math.max(2, Math.floor((X(o.n - 1) - pl) / lw)), step = Math.ceil(o.n / maxL);
+      for (let i = 0; i < o.n; i += step) x.fillText(o.dates[i], Math.min(Math.max(pl, X(i) - lw / 2 + 7), W - pr - lw), H - 5);
+    }
   }
   (o.hlines || []).forEach(([v, c]) => { x.strokeStyle = colorOf(c); x.setLineDash([4, 4]); x.beginPath(); x.moveTo(pl, Y(v)); x.lineTo(W - pr, Y(v)); x.stroke(); x.setLineDash([]); });
   if (o.band){
