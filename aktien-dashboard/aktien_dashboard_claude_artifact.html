@@ -61,7 +61,13 @@ tr.grp td{background:var(--panel2);font-weight:700;color:var(--accent)}
 footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 .err{color:var(--down);font-size:13px}
 .startup{grid-column:1/-1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;line-height:1.6;max-width:760px}
+.sel{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px}
+.live{background:rgba(46,204,113,.15);color:var(--up);border:1px solid rgba(46,204,113,.4);border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700;margin-left:6px;vertical-align:middle}
+.usage{display:block;margin-top:4px;color:var(--muted)}
+.wait{color:var(--muted);font-size:12px;margin-top:6px}
+.when{font-size:11px;color:var(--muted);margin-top:4px}
 .note{background:rgba(227,179,65,.1);border:1px solid rgba(227,179,65,.45);border-radius:8px;padding:10px 12px;margin-bottom:12px;line-height:1.5;max-width:1100px}
+.banner[hidden]{display:none}
 .banner{background:rgba(255,92,92,.12);border:1px solid var(--down);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .tabs{display:flex;gap:6px;margin-bottom:6px}.tabs button{padding:4px 10px;font-size:12px}
 .tabs button:not(.on){background:transparent;color:var(--muted);border:1px solid var(--line)}
@@ -79,81 +85,301 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 <header>
   <h1>Aktien-Dashboard<span id="demoTag"></span></h1>
   <form id="addForm" style="display:flex;gap:6px;flex-wrap:wrap">
-    <input id="symIn" placeholder="Symbol, z. B. AAPL, SAP.DE, BTC-USD" autocomplete="off">
+    <input id="symIn" placeholder="Symbol, z. B. AAPL, ETH/USD, NFLX" autocomplete="off">
     <button>Hinzufügen</button>
     <button type="button" class="ghost" id="resetBtn" title="Standardliste wiederherstellen">Standard</button>
   </form>
-  <select id="sortSel" style="background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px">
+  <select id="sortSel" class="sel">
     <option value="list">Sortierung: Liste</option>
     <option value="score">Sortierung: Signal-Stärke</option>
     <option value="chg">Sortierung: Tagesänderung</option>
   </select>
-  <div class="status"><span class="dot" id="dot"></span><span id="stat">lade …</span>
-    <button class="ghost" id="nowBtn">Jetzt aktualisieren</button>
-    <button class="ghost" id="demoBtn" hidden>Demo-Modus</button></div>
+  <select id="everySel" class="sel" title="Wie oft reihum ein Kurs abgefragt wird">
+    <option value="10">Takt: alle 10 s</option>
+    <option value="30">Takt: alle 30 s</option>
+    <option value="60">Takt: alle 60 s</option>
+  </select>
+  <div class="status"><span class="dot" id="dot"></span><span id="stat">verbinde …</span>
+    <button class="ghost" id="nowBtn">Jetzt aktualisieren</button></div>
 </header>
 <main>
-  <div class="note" id="note"><b>Hinweis:</b> In Claude darf diese Seite keine Börsendaten aus dem Internet laden.
-    Die Kurse sind deshalb <b>simuliert</b> und keine echten Werte. Indikatoren und Tipps werden aber genauso berechnet
-    wie mit echten Kursen. Echte Kurse gibt es mit der Datei im Browser am PC oder Mac, oder später hier über einen verbundenen Kursdaten-Connector.</div>
-  <div id="banner" class="banner" style="display:none">⚠ Live-Kurse konnten nicht geladen werden (keine Internetverbindung, oder Yahoo Finance bzw. die Proxys blockieren gerade).
-    <button id="bannerDemo">Demo-Daten anzeigen</button></div>
+  <div class="note" id="note">Verbinde mit Twelve Data …</div>
+  <div id="banner" class="banner" hidden><span id="bannerText"></span>
+    <button id="bannerDemo" hidden>Simulierte Kurse anzeigen</button></div>
   <div class="grid" id="grid"><div class="startup" id="startup"><b>Das Dashboard startet …</b></div></div>
   <section id="detail"></section>
 </main>
-<footer>Simulierte Kurse zur Vorführung. Aktualisierung alle 10 Sekunden, solange die Seite sichtbar ist.<br>
+<footer>Kurse: Twelve Data über deinen verbundenen Connector (Tageskerzen + reihum aktualisierte Live-Kurse).<br>
 ⚠️ Die Kauf-/Verkaufstipps werden automatisch aus technischen Indikatoren berechnet und sind <b>keine Anlageberatung</b>. Investieren auf eigenes Risiko.</footer>
 <script>
-let DEMO = true;   // In Claude darf die Seite keine Börsendaten aus dem Internet laden
-const INTERVAL = 10;
-const DEFAULT = ["NVDA","AAPL","BTC-USD","MSFT","AMZN","GOOGL","META","TSLA","SAP.DE","SIE.DE"];
+// ---------------------------------------------------------------------
+// Einstellungen
+// ---------------------------------------------------------------------
+const SERVER = "Twelve Data";
+const DAY_LIMIT = 800;          // kostenloser Tarif: 800 Abfragen pro Tag …
+const MIN_LIMIT = 7;            // … und 8 pro Minute (eine als Reserve)
+const DAY_RESERVE = 20;         // Rest für neu hinzugefügte Werte
+const SYMBOL_GAP = 60 * 1000;   // ein Wert höchstens einmal pro Minute
+const CLOSED_GAP = 15 * 60 * 1000; // Börse zu: nur alle 15 Minuten nachsehen
+const DEFAULT = ["NVDA","AAPL","BTC/USD","MSFT","AMZN","GOOGL","META","TSLA","SAP","AMD"];
+const NAMES = {NVDA:"NVIDIA", AAPL:"Apple", "BTC/USD":"Bitcoin", MSFT:"Microsoft", AMZN:"Amazon",
+  GOOGL:"Alphabet (Google)", META:"Meta Platforms", TSLA:"Tesla", SAP:"SAP (Börse New York)", AMD:"AMD"};
+const MIC = {DE:"XETR", F:"XFRA", L:"XLON", PA:"XPAR", AS:"XAMS", MI:"XMIL", SW:"XSWX", TO:"XTSE", HK:"XHKG", VI:"XWBO"};
+
 let symbols = load("symbols", DEFAULT);
 let selected = load("selected", null);
 let sortBy = load("sort", "list");
-let data = {}, lastPrice = {}, countdown = INTERVAL, busy = false, chartTab = load("tab", "rsi");
+let everySec = load("every", 10);
+let chartTab = load("tab", "rsi");
+let data = {}, lastPrice = {}, busy = false, countdown = 0;
+let mcp = null, mode = "start";     // "start" | "live" | "demo"
+let DEMO = false;
+const store = {};                   // Symbol -> {candles, name, currency, exchange, marketOpen, marketTime, quotedAt, nextQuoteAt, error}
+let rr = 0, lastLive = "";          // Reihum-Zeiger
+let pausedUntil = 0, dayOut = false, fatal = null, transient = "";
+const callTimes = [];
 
-function load(k, d){ try{ const v = localStorage.getItem("ad_"+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
-function save(k, v){ try{ localStorage.setItem("ad_"+k, JSON.stringify(v)); }catch(e){} }
+function load(k, d){ try{ const v = localStorage.getItem("td_"+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
+function save(k, v){ try{ localStorage.setItem("td_"+k, JSON.stringify(v)); }catch(e){} }
 const $ = s => document.querySelector(s);
 const nf = (x, d=2) => x==null||isNaN(x) ? "–" : x.toLocaleString("de-DE",{minimumFractionDigits:d, maximumFractionDigits:d});
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 function badgeCls(l){ return {"Starker Kauf":"b-sb","Kaufen":"b-b","Halten / Neutral":"b-n","Verkaufen":"b-s","Starker Verkauf":"b-ss"}[l] || "b-n"; }
 function sigTxt(s){ return s>0 ? '<span class="sig up">▲ Kauf</span>' : s<0 ? '<span class="sig down">▼ Verkauf</span>' : '<span class="sig neu">● Neutral</span>'; }
-function updateDemo(){
-  $("#demoTag").innerHTML = '<span class="demo">SIMULIERTE KURSE</span>';
-  $("#demoBtn").textContent = DEMO ? "Live-Daten" : "Demo-Modus";
-}
-function setDemo(on){
-  DEMO = on; save("demo", on); data = {}; lastPrice = {};
-  $("#banner").style.display = "none"; updateDemo(); render(); refresh();
-}
-updateDemo();
-$("#sortSel").value = sortBy;
+const todayUTC = () => new Date().toISOString().slice(0, 10);
+const usedToday = () => load("used_" + todayUTC(), 0);
+const hhmm = ms => new Date(ms).toLocaleTimeString("de-DE", {hour: "2-digit", minute: "2-digit"});
 
-async function refresh(){
-  if (busy || !symbols.length) return;
-  busy = true;
-  const mode = DEMO, list = symbols.slice();
-  $("#stat").textContent = "aktualisiere …";
+// Symbol-Schreibweisen: Yahoo-Format (BTC-USD, SAP.DE) in Twelve-Data-Format umwandeln
+function normSym(raw){
+  let s = raw.trim().toUpperCase();
+  if (!s) return null;
+  s = s.replace(/^([A-Z0-9]{2,6})-(USD|EUR|USDT|GBP|CHF)$/, "$1/$2");
+  return s;
+}
+function tdArgs(sym){
+  let m = sym.match(/^(.+)\.([A-Z]{1,2})$/);
+  if (m && MIC[m[2]]) return {symbol: m[1], mic_code: MIC[m[2]]};
+  m = sym.match(/^(.+):([A-Z]{4})$/);
+  if (m) return {symbol: m[1], mic_code: m[2]};
+  return {symbol: sym};
+}
+const isCrypto = sym => /^[A-Z0-9]+\/[A-Z]+$/.test(sym);
+const guessCur = sym => isCrypto(sym) ? sym.split("/")[1] : (tdArgs(sym).mic_code ? "" : "USD");
+
+// ---------------------------------------------------------------------
+// Twelve Data über den Connector (mit Minuten- und Tageslimit)
+// ---------------------------------------------------------------------
+function budgetOK(){
+  const now = Date.now();
+  while (callTimes.length && now - callTimes[0] > 60000) callTimes.shift();
+  return !dayOut && !fatal && now >= pausedUntil && callTimes.length < MIN_LIMIT;
+}
+function noteCall(){ callTimes.push(Date.now()); save("used_" + todayUTC(), usedToday() + 1); }
+
+function resultText(r){
+  if (r == null) return "";
+  if (typeof r === "string") return r;
+  const p = r.payload;
+  if (typeof p === "string") return p;
+  if (p && typeof p.result === "string") return p.result;
+  if (typeof r.result === "string") return r.result;
+  const b = (r.content || []).find(c => c.type === "text");
+  if (b){ try{ const j = JSON.parse(b.text); if (j && typeof j.result === "string") return j.result; }catch(e){} return b.text; }
+  return "";
+}
+function apiError(msg){
+  msg = String(msg || "Unerwartete Antwort von Twelve Data").replace(/^\s*Error:\s*/i, "").replace(/\n\s*\(This data requires[\s\S]*$/, "").trim();
+  const e = new Error(msg);
+  e.code = "api";
+  if (/current minute/i.test(msg)){ e.kind = "minute"; pausedUntil = (Math.floor(Date.now() / 60000) + 1) * 60000 + 1500; }
+  else if (/credits for the day|daily limit/i.test(msg)){ e.kind = "day"; dayOut = true; }
+  else if (/Grow|Venture|Pro plan|Enterprise|upgrad/i.test(msg)) e.kind = "plan";
+  return e;
+}
+async function td(tool, input){
+  noteCall();
   let res;
-  try{ res = await loadAll(list); }catch(e){ res = list.map(s => ({symbol: s, error: e.message})); }
-  busy = false; countdown = INTERVAL;
-  if (mode !== DEMO) return refresh();   // Modus wurde während des Ladens umgeschaltet
-  res.forEach((d, i) => { data[list[i]] = d; });
-  const offline = !DEMO && res.length > 0 && res.every(d => d.error && d.network);
-  $("#banner").style.display = offline ? "flex" : "none";
-  $("#dot").className = offline ? "dot err" : "dot";
-  $("#stat").textContent = offline ? "keine Verbindung zu Yahoo Finance" : "Stand " + new Date().toLocaleTimeString("de-DE");
+  try{ res = await mcp.callTool(SERVER, tool, input, {cache: false}); }
+  catch(e){ if (e && e.code === "tool_error") throw apiError(e.message || resultText(e.result)); throw e; }
+  const text = resultText(res);
+  if (!(text.split("\n")[0] || "").includes(";")) throw apiError(text);   // Kopfzeile fehlt -> Meldung statt Daten
+  return text;
+}
+function parseCSV(text){
+  const lines = text.trim().split(/\r?\n/), head = lines[0].split(";");
+  return lines.slice(1).filter(Boolean).map(l => { const v = l.split(";"), o = {}; head.forEach((h, i) => o[h] = v[i]); return o; });
+}
+const dayTs = s => Date.parse(String(s).slice(0, 10) + "T00:00:00Z") / 1000;
+
+function applyHistory(sym, entry){
+  const e = store[sym] = store[sym] || {};
+  e.candles = entry.candles.map(c => ({...c}));
+  e.error = null;
+  recompute(sym);
+}
+async function loadHistory(sym){
+  const text = await td("get_time_series", {...tdArgs(sym), interval: "1day", outputsize: 400});
+  const candles = parseCSV(text).reverse()
+    .map(r => ({t: dayTs(r.datetime), o: +r.open, h: +r.high, l: +r.low, c: +r.close, v: +(r.volume || 0)}))
+    .filter(c => [c.t, c.o, c.h, c.l, c.c].every(isFinite));
+  if (candles.length < 30) throw apiError("Zu wenig Kursdaten für " + sym);
+  const entry = {day: todayUTC(), candles};
+  save("hist_" + sym, entry);
+  applyHistory(sym, entry);
+}
+async function loadQuote(sym){
+  const e = store[sym];
+  e.nextQuoteAt = Date.now() + SYMBOL_GAP;
+  const q = parseCSV(await td("get_quote", tdArgs(sym)))[0];
+  if (!q) throw apiError("Leere Antwort");
+  e.name = q.name || e.name;
+  e.exchange = q.exchange || e.exchange;
+  e.currency = q.currency || e.currency;
+  e.marketOpen = q.is_market_open === "true";
+  e.marketTime = +q.last_quote_at || +q.timestamp || e.marketTime;
+  e.quotedAt = Date.now();
+  const c = {t: dayTs(q.datetime), o: +q.open, h: +q.high, l: +q.low, c: +q.close, v: +(q.volume || 0)};
+  if ([c.t, c.o, c.h, c.l, c.c].every(isFinite)){
+    const cs = e.candles, lc = cs[cs.length - 1];
+    if (c.t === lc.t) cs[cs.length - 1] = c; else if (c.t > lc.t) cs.push(c);
+  }
+  if (!e.marketOpen) e.nextQuoteAt = Date.now() + CLOSED_GAP;
+  recompute(sym);
+}
+function recompute(sym){
+  const e = store[sym];
+  try{
+    const d = analyze({symbol: sym, name: e.name || NAMES[sym] || sym, currency: e.currency || guessCur(sym),
+      exchange: e.exchange || "", marketTime: e.marketTime || e.candles[e.candles.length - 1].t, candles: e.candles});
+    d.marketOpen = e.marketOpen; d.quotedAt = e.quotedAt; d.crypto = isCrypto(sym);
+    data[sym] = d;
+  }catch(err){ data[sym] = {symbol: sym, error: "Auswertung fehlgeschlagen: " + err.message}; }
+}
+
+const FATAL = {server_not_connected: 1, selection_required: 1, needs_reauth: 1, not_in_manifest: 1,
+               blocked_by_policy: 1, approval_required: 1, server_not_found: 1};
+const NO_MCP = {not_granted: 1, capability_disabled: 1, capability_removed: 1};
+function fatalText(code){
+  return {
+    server_not_connected: "Twelve Data ist für dich nicht verbunden. Verbinde es in claude.ai unter Einstellungen → Connectors und lade die Seite dann neu.",
+    selection_required: "Es gibt mehrere Twelve-Data-Verbindungen. Wähle in der Abfrage von Claude eine aus und lade die Seite neu.",
+    needs_reauth: "Die Anmeldung bei Twelve Data ist abgelaufen. Verbinde Twelve Data in claude.ai unter Einstellungen → Connectors neu und lade die Seite dann neu.",
+    not_in_manifest: "Diese Seite darf Twelve Data gerade nicht nutzen (Zugriff abgelehnt oder ausgeschaltet). Lade die Seite neu, um den Zugriff zu erlauben.",
+    blocked_by_policy: "Deine Organisation erlaubt diese Twelve-Data-Abfrage nicht.",
+    approval_required: "Deine Organisation verlangt für Twelve-Data-Abfragen eine Freigabe, die hier nicht möglich ist.",
+    server_not_found: "Die Twelve-Data-Verbindung gibt es nicht mehr. Verbinde Twelve Data in claude.ai neu.",
+  }[code];
+}
+function planMsg(sym){
+  return `${sym} ist nur im bezahlten Twelve-Data-Tarif enthalten (Grow oder Venture, twelvedata.com/pricing). ` +
+         `Im kostenlosen Tarif gibt es US-Aktien und Krypto${/\.DE$/.test(sym) ? `, z. B. ${sym.replace(/\.DE$/, "")} statt ${sym}` : ""}.`;
+}
+function handleError(sym, e){
+  const code = e && e.code;
+  if (code === "api"){
+    if (e.kind === "minute" || e.kind === "day") return;          // Status/Banner zeigen das, später weiter
+    if (!store[sym] || !store[sym].candles){
+      store[sym] = {error: e.kind === "plan" ? planMsg(sym) : e.message};
+      data[sym] = {symbol: sym, error: store[sym].error};
+    }
+    return;
+  }
+  if (NO_MCP[code]){ startDemo("Twelve Data ist in dieser Ansicht nicht verfügbar, deshalb werden simulierte Kurse angezeigt."); return; }
+  if (FATAL[code]){ fatal = code; return; }
+  // vorübergehend: server_unavailable, upstream_error, rate_limited, cancelled, unbekannt
+  transient = "Twelve Data antwortet gerade nicht. Neuer Versuch beim nächsten Takt.";
+  if (e && e.retryAfterMs) pausedUntil = Math.max(pausedUntil, Date.now() + e.retryAfterMs);
+}
+async function guarded(sym, fn){
+  try{ await fn(); transient = ""; }catch(e){ handleError(sym, e); }
+}
+
+function nextLive(){
+  const now = Date.now();
+  for (let k = 0; k < symbols.length; k++){
+    const s = symbols[(rr + k) % symbols.length], e = store[s];
+    if (!e || !e.candles || e.error || (e.nextQuoteAt && now < e.nextQuoteAt)) continue;
+    rr = (rr + k + 1) % symbols.length;
+    return s;
+  }
+  return null;
+}
+
+async function tick(force){
+  if (busy || mode === "start") return;
+  if (mode === "demo"){ demoTick(); return; }
+  busy = true;
+  try{
+    // 1) Kurshistorie: einmal pro Tag je Wert, sonst aus dem Browser-Speicher
+    const jobs = [];
+    for (const s of symbols){
+      if (store[s] && (store[s].candles || store[s].error)) continue;
+      const cached = load("hist_" + s, null);
+      if (cached && cached.day === todayUTC()){ applyHistory(s, cached); continue; }
+      if (!budgetOK()) break;
+      jobs.push(guarded(s, () => loadHistory(s)));
+    }
+    await Promise.all(jobs);
+    // 2) ein Live-Kurs reihum (oder der ausgewählte Wert bei "Jetzt aktualisieren")
+    const ready = symbols.every(s => store[s] && (store[s].candles || store[s].error));
+    if (ready && budgetOK() && usedToday() < DAY_LIMIT - DAY_RESERVE){
+      const f = force && store[force] && store[force].candles ? force : null;
+      const s = f || nextLive();
+      if (s){ lastLive = s; await guarded(s, () => loadQuote(s)); }
+    }
+  }finally{ busy = false; }
   render();
 }
 
-setInterval(()=>{
-  if (document.hidden){ $("#dot").className="dot paused"; $("#stat").textContent="pausiert (Tab nicht sichtbar)"; return; }
-  countdown--;
-  const s = $("#stat"); if (!busy && s.textContent.startsWith("Stand")) s.textContent = s.textContent.split(" · ")[0] + " · nächste in " + Math.max(countdown,0) + " s";
-  if (countdown <= 0) refresh();
+// ---------------------------------------------------------------------
+// Anzeige von Status, Hinweisen und Fehlern
+// ---------------------------------------------------------------------
+function updateNote(){
+  if (mode === "demo") return;
+  const used = usedToday();
+  $("#note").innerHTML = `<b>Echte Kurse von Twelve Data.</b> Dein kostenloser Tarif erlaubt 800 Abfragen pro Tag und 8 pro Minute.
+    Deshalb wird alle ${everySec} s <b>reihum ein Wert</b> aktualisiert, jeder Wert höchstens einmal pro Minute, bei geschlossener Börse nur alle 15 Minuten.
+    Die Kurshistorie wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten.
+    <span class="usage">Heute von dieser Seite genutzt: <b>${used}</b> von ${DAY_LIMIT}</span>`;
+}
+function updateBanner(){
+  let txt = "", demoBtn = false;
+  if (fatal){ txt = fatalText(fatal); demoBtn = true; }
+  else if (dayOut || usedToday() >= DAY_LIMIT - DAY_RESERVE){ txt = "Das Tageskontingent von Twelve Data ist (fast) aufgebraucht. Die Kurse bleiben auf dem letzten Stand. Ab 2 Uhr nachts (deutscher Zeit) geht es automatisch weiter."; }
+  $("#bannerText").textContent = txt;
+  $("#bannerDemo").hidden = !demoBtn;
+  $("#banner").hidden = !txt;
+}
+function updateStatus(){
+  const st = $("#stat"), dot = $("#dot");
+  if (mode === "start"){ st.textContent = "verbinde …"; return; }
+  if (document.hidden){ dot.className = "dot paused"; st.textContent = "pausiert (Tab nicht sichtbar)"; return; }
+  if (mode === "demo"){ dot.className = "dot"; st.textContent = "Simulation · nächste in " + Math.max(countdown, 0) + " s"; return; }
+  if (fatal){ dot.className = "dot err"; st.textContent = "keine Verbindung zu Twelve Data"; return; }
+  if (dayOut || usedToday() >= DAY_LIMIT - DAY_RESERVE){ dot.className = "dot err"; st.textContent = "Tageskontingent aufgebraucht"; return; }
+  const now = Date.now();
+  while (callTimes.length && now - callTimes[0] > 60000) callTimes.shift();
+  if (busy){ dot.className = "dot"; st.textContent = "lade Kurse …"; return; }
+  if (now < pausedUntil || callTimes.length >= MIN_LIMIT){
+    const wait = Math.ceil(((now < pausedUntil ? pausedUntil : callTimes[0] + 60000) - now) / 1000);
+    dot.className = "dot paused"; st.textContent = "Minutenlimit erreicht · weiter in " + wait + " s"; return;
+  }
+  dot.className = transient ? "dot paused" : "dot";
+  const pending = symbols.filter(s => !store[s] || (!store[s].candles && !store[s].error)).length;
+  st.textContent = transient ? transient
+    : pending ? `lade Historie (${symbols.length - pending}/${symbols.length}) · nächste in ${Math.max(countdown, 0)} s`
+    : `Live${lastLive ? " · zuletzt " + lastLive : ""} · nächste in ${Math.max(countdown, 0)} s`;
+}
+
+setInterval(() => {
+  if (!document.hidden && mode !== "start"){
+    countdown--;
+    if (countdown <= 0){ countdown = mode === "demo" ? 10 : everySec; tick(); }
+  }
+  updateStatus();
 }, 1000);
-document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) refresh(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden){ countdown = 1; } });
 
 function render(){
   const g = $("#grid");
@@ -163,16 +389,19 @@ function render(){
   if (sortBy === "chg") list.sort((a,b)=>num(b, x => x.changePct, -999) - num(a, x => x.changePct, -999));
   g.innerHTML = list.map(s => {
     const d = data[s];
-    if (!d) return `<div class="card" data-s="${esc(s)}"><div class="sym">${esc(s)}</div><div class="nm">lade …</div></div>`;
-    if (d.error) return `<div class="card" data-s="${esc(s)}"><button class="rm" data-rm="${esc(s)}">×</button><div class="sym">${esc(s)}</div><div class="err">⚠ ${esc(d.error)}</div></div>`;
+    if (!d) return `<div class="card" data-s="${esc(s)}"><button class="rm" data-rm="${esc(s)}" title="entfernen">×</button><div class="sym">${esc(s)}</div><div class="nm">${esc(NAMES[s] || "")}</div><div class="wait">wartet auf Kursdaten …</div></div>`;
+    if (d.error) return `<div class="card" data-s="${esc(s)}"><button class="rm" data-rm="${esc(s)}" title="entfernen">×</button><div class="sym">${esc(s)}</div><div class="err">⚠ ${esc(d.error)}</div></div>`;
     const cls = d.change >= 0 ? "up" : "down";
     const pos = ((d.total.score + 1) / 2 * 100).toFixed(1);
     let flash = "";
     if (lastPrice[s] != null && lastPrice[s] !== d.price) flash = d.price > lastPrice[s] ? "flash-up" : "flash-down";
     lastPrice[s] = d.price;
+    const when = mode === "demo" ? "simuliert"
+      : d.quotedAt ? "aktualisiert " + hhmm(d.quotedAt) + (d.marketOpen === false ? " · Börse zu" : "")
+      : "Stand " + new Date(d.marketTime * 1000).toLocaleDateString("de-DE", {timeZone: "UTC"});
     return `<div class="card ${s===selected?"sel":""} ${flash}" data-s="${esc(s)}">
       <button class="rm" data-rm="${esc(s)}" title="entfernen">×</button>
-      <div class="top"><div><div class="sym">${esc(d.symbol)}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div></div>
+      <div class="top"><div><div class="sym">${esc(s)}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div></div>
       <div><div class="px">${nf(d.price)} <small style="font-size:11px;color:var(--muted)">${esc(d.currency)}</small></div>
       <div class="chg ${cls}">${d.change>=0?"+":""}${nf(d.change)} (${d.change>=0?"+":""}${nf(d.changePct)} %)</div></div></div>
       <canvas data-spark="${esc(s)}"></canvas>
@@ -181,6 +410,7 @@ function render(){
         <span class="cnt"><span class="up">▲${d.total.buy}</span>&nbsp;<span class="neu">●${d.total.neutral}</span>&nbsp;<span class="down">▼${d.total.sell}</span></span>
       </div>
       <div class="meter"><i style="left:${pos}%"></i></div>
+      <div class="when">${esc(when)}</div>
     </div>`;
   }).join("");
   g.querySelectorAll("canvas[data-spark]").forEach(cv => {
@@ -188,6 +418,7 @@ function render(){
     const c = d.chart.c.slice(-60);
     drawChart(cv, {n:c.length, series:[{v:c, color: c[c.length-1]>=c[0] ? "#2ecc71" : "#ff5c5c", w:1.5, fill:true}], pad:[2,2,2,2], noAxis:true});
   });
+  updateNote(); updateBanner(); updateStatus();
   renderDetail();
 }
 
@@ -201,15 +432,32 @@ $("#grid").addEventListener("click", e => {
 });
 $("#addForm").addEventListener("submit", e => {
   e.preventDefault();
-  const v = $("#symIn").value.split(/[ ,;]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
-  for (const s of v) if (!symbols.includes(s)) symbols.push(s);
-  save("symbols", symbols); $("#symIn").value = ""; render(); refresh();
+  const v = $("#symIn").value.split(/[ ,;]+/).map(normSym).filter(Boolean);
+  for (const s of v) if (!symbols.includes(s)){ symbols.push(s); delete store[s]; delete data[s]; }
+  save("symbols", symbols); $("#symIn").value = ""; render(); tick();
 });
-$("#resetBtn").onclick = () => { symbols = DEFAULT.slice(); save("symbols", symbols); render(); refresh(); };
-$("#nowBtn").onclick = refresh;
-$("#demoBtn").onclick = () => setDemo(!DEMO);
-$("#bannerDemo").onclick = () => setDemo(true);
+$("#resetBtn").onclick = () => { symbols = DEFAULT.slice(); save("symbols", symbols); render(); tick(); };
+$("#nowBtn").onclick = () => { countdown = mode === "demo" ? 10 : everySec; tick(selected); };
+$("#bannerDemo").onclick = () => startDemo("Simulierte Kurse, weil Twelve Data gerade nicht verbunden ist.");
+$("#sortSel").value = sortBy;
 $("#sortSel").onchange = e => { sortBy = e.target.value; save("sort", sortBy); render(); };
+$("#everySel").value = String(everySec);
+$("#everySel").onchange = e => { everySec = +e.target.value; save("every", everySec); countdown = Math.min(countdown, everySec); updateNote(); };
+
+// ---------------------------------------------------------------------
+// Start: Connector anfragen, sonst Simulation
+// ---------------------------------------------------------------------
+function startDemo(reason){
+  mode = "demo"; DEMO = true; data = {}; lastPrice = {};
+  $("#demoTag").innerHTML = '<span class="demo">SIMULIERTE KURSE</span>';
+  $("#note").innerHTML = "<b>Hinweis:</b> " + esc(reason) + " Die Kurse sind <b>keine echten Werte</b>; Indikatoren und Tipps werden aber genauso berechnet.";
+  $("#banner").hidden = true; $("#everySel").hidden = true;
+  countdown = 10; demoTick();
+}
+function demoTick(){
+  for (const s of symbols){ try{ data[s] = analyze(demoRaw(s)); }catch(e){ data[s] = {symbol: s, error: e.message}; } }
+  render();
+}
 
 function renderDetail(){
   const el = $("#detail");
@@ -225,7 +473,7 @@ function renderDetail(){
   const time = d.marketTime ? new Date(d.marketTime*1000).toLocaleString("de-DE") : "";
   el.innerHTML = `
   <div class="dhead">
-    <div><h2>${esc(d.name)} <span class="sub">${esc(d.symbol)} · ${esc(d.exchange)}</span></h2>
+    <div><h2>${esc(d.name)} <span class="sub">${esc(d.symbol)}${d.exchange ? " · " + esc(d.exchange) : ""}</span></h2>
     <div class="sub">Letzter Kurs: ${esc(time)}</div></div>
     <div style="text-align:right"><div style="font-size:28px;font-weight:800">${nf(d.price)} ${esc(d.currency)}</div>
     <div class="${cls}">${d.change>=0?"+":""}${nf(d.change)} (${d.change>=0?"+":""}${nf(d.changePct)} %)</div></div>
@@ -233,7 +481,7 @@ function renderDetail(){
   <div class="sumrow">
     <div class="panel"><h3>Gesamt</h3><span class="badge ${badgeCls(d.total.label)}" style="font-size:14px">${esc(d.total.label)}</span>
       <div class="meter"><i style="left:${((d.total.score+1)/2*100).toFixed(1)}%"></i></div>
-      <div class="cnt"><span class="up">Kauf ${d.total.buy}</span><span class="neu">Neutral ${d.total.neutral}</span><span class="down">Verkauf ${d.total.sell}</span></div></div>
+      <div class="cnt"><span class="up">▲${d.total.buy}</span><span class="neu">●${d.total.neutral}</span><span class="down">▼${d.total.sell}</span></div></div>
     ${groups.map(([g,s])=>`<div class="panel"><h3>${esc(g)}</h3><span class="badge ${badgeCls(s.label)}">${esc(s.label)}</span>
       <div class="meter"><i style="left:${((s.score+1)/2*100).toFixed(1)}%"></i></div>
       <div class="cnt"><span class="up">▲${s.buy}</span><span class="neu">●${s.neutral}</span><span class="down">▼${s.sell}</span></div></div>`).join("")}
@@ -265,7 +513,7 @@ function renderDetail(){
         <span>Tageshoch / -tief</span><span>${nf(d.dayHigh)} / ${nf(d.dayLow)}</span>
         <span>52 Wochen Hoch / Tief</span><span>${nf(d.high52)} / ${nf(d.low52)}</span>
         <span>Abstand 52W-Hoch</span><span>${nf((d.price/d.high52-1)*100)} %</span>
-        <span>Volumen heute</span><span>${nf(d.volume,0)}</span>
+        <span>Volumen heute</span><span>${d.volume ? nf(d.volume,0) : "–"}</span>
       </div></div>
       <div class="panel" style="margin-top:12px"><h3>Pivot-Punkte (klassisch)</h3><div class="kv">
         ${Object.entries(d.pivots).map(([k,v])=>`<span>${k}</span><span class="${k[0]==="R"?"down":k[0]==="S"?"up":""}">${nf(v)}${Math.abs(v-d.price)/d.price<0.01?" ← nahe Kurs":""}</span>`).join("")}
@@ -289,109 +537,6 @@ function renderDetail(){
   if (chartTab === "stoch") drawChart($("#cInd"), {n, series:[{v:ch.stk,color:"#58a6ff",w:1.5},{v:ch.std,color:"#f0883e",w:1.2}], hlines:[[80,"rgba(255,92,92,.6)"],[20,"rgba(46,204,113,.6)"]], yMin:0, yMax:100});
 }
 
-// =====================================================================
-// Datenquelle: Yahoo Finance (direkt oder über öffentliche CORS-Proxys)
-// =====================================================================
-const PROXIES = [
-  u => u,
-  u => "https://corsproxy.io/?url=" + encodeURIComponent(u),
-  u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
-  u => "https://api.codetabs.com/v1/proxy/?quest=" + encodeURIComponent(u),
-];
-let proxyIdx = load("proxy", 0) % PROXIES.length;
-const histCache = {};
-const HIST_MAX_AGE = 5 * 60 * 1000;   // komplette Historie alle 5 Min. neu laden
-let sparkOK = true;                   // Sammelabfrage für Live-Kurse verfügbar?
-
-async function fetchJSON(url){
-  for (let k = 0; k < PROXIES.length; k++){
-    const idx = (proxyIdx + k) % PROXIES.length;
-    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 8000);
-    try{
-      const r = await fetch(PROXIES[idx](url), {signal: ctl.signal, cache: "no-store"});
-      const j = JSON.parse(await r.text());
-      if (!j || typeof j !== "object" || !(j.chart || j.spark || r.ok)) throw new Error("HTTP " + r.status);
-      if (idx !== proxyIdx){ proxyIdx = idx; save("proxy", idx); }
-      return j;
-    }catch(e){ /* nächsten Weg probieren */ }
-    finally{ clearTimeout(tm); }
-  }
-  const err = new Error("Keine Verbindung zu Yahoo Finance");
-  err.network = true;
-  throw err;
-}
-
-async function fetchChart(sym){
-  const j = await fetchJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=2y&interval=1d&includePrePost=false`);
-  const res = j.chart && j.chart.result && j.chart.result[0];
-  if (!res) throw new Error((j.chart && j.chart.error && j.chart.error.description) || "Symbol nicht gefunden");
-  const meta = res.meta || {}, ts = res.timestamp || [];
-  const q = (res.indicators && res.indicators.quote && res.indicators.quote[0]) || {};
-  const candles = [];
-  ts.forEach((t, i) => {
-    const at = k => (q[k] || [])[i];
-    const o = at("open"), h = at("high"), l = at("low"), c = at("close");
-    if ([o, h, l, c].some(x => x == null)) return;
-    candles.push({t, o, h, l, c, v: at("volume") || 0});
-  });
-  if (candles.length < 30) throw new Error("Zu wenig Kursdaten");
-  return {symbol: meta.symbol || sym, name: meta.longName || meta.shortName || sym, currency: meta.currency || "",
-          exchange: meta.fullExchangeName || meta.exchangeName || "", marketTime: meta.regularMarketTime,
-          price: meta.regularMarketPrice, candles};
-}
-
-async function fetchLive(syms){
-  const out = {};
-  for (let i = 0; i < syms.length; i += 20){
-    const chunk = syms.slice(i, i + 20);
-    const j = await fetchJSON(`https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(chunk.join(","))}&range=1d&interval=5m`);
-    if (j.spark && j.spark.result){
-      j.spark.result.forEach(r => {
-        const m = r.response && r.response[0] && r.response[0].meta;
-        if (m && m.regularMarketPrice) out[String(r.symbol).toUpperCase()] = {p: m.regularMarketPrice, t: m.regularMarketTime};
-      });
-    } else {
-      for (const [k, v] of Object.entries(j)){
-        if (v && Array.isArray(v.close)){
-          const cl = v.close.filter(x => x != null);
-          if (cl.length) out[k.toUpperCase()] = {p: cl[cl.length - 1], t: v.timestamp ? v.timestamp[v.timestamp.length - 1] : null};
-        }
-      }
-    }
-  }
-  return out;
-}
-
-function applyLive(raw, price, time){
-  const r = {...raw, candles: raw.candles.map(c => ({...c}))};
-  if (price){
-    const lc = r.candles[r.candles.length - 1];
-    lc.c = price; lc.h = Math.max(lc.h, price); lc.l = Math.min(lc.l, price);
-  }
-  if (time) r.marketTime = time;
-  return r;
-}
-
-async function loadAll(syms){
-  if (DEMO) return syms.map(s => { try{ return analyze(demoRaw(s)); }catch(e){ return {symbol: s, error: e.message}; } });
-  const now = Date.now();
-  const fresh = syms.filter(s => histCache[s] && now - histCache[s].time < HIST_MAX_AGE);
-  let live = null;
-  if (fresh.length && sparkOK){
-    try{ live = await fetchLive(fresh); if (!Object.keys(live).length){ live = null; sparkOK = false; } }
-    catch(e){ sparkOK = false; }
-  }
-  return Promise.all(syms.map(async s => {
-    try{
-      const hc = histCache[s];
-      if (hc && live && live[s] && now - hc.time < HIST_MAX_AGE) return analyze(applyLive(hc.raw, live[s].p, live[s].t));
-      const raw = await fetchChart(s);
-      histCache[s] = {raw, time: Date.now()};
-      return analyze(applyLive(raw, raw.price, raw.marketTime));
-    }catch(e){ return {symbol: s, error: e.message, network: !!e.network}; }
-  }));
-}
-
 // ---------------------------------------------------------------------
 // Demo-Daten (simulierter Kursverlauf, falls keine Verbindung möglich)
 // ---------------------------------------------------------------------
@@ -400,6 +545,7 @@ const DEMO_NAMES = {
   "AMZN": ["Amazon.com Inc.", "USD", 180], "GOOGL": ["Alphabet Inc.", "USD", 165], "META": ["Meta Platforms Inc.", "USD", 500],
   "TSLA": ["Tesla Inc.", "USD", 240], "SAP.DE": ["SAP SE", "EUR", 200], "SIE.DE": ["Siemens AG", "EUR", 175],
   "ALV.DE": ["Allianz SE", "EUR", 270], "BMW.DE": ["BMW AG", "EUR", 90], "MBG.DE": ["Mercedes-Benz Group AG", "EUR", 65],
+  "BTC/USD": ["Bitcoin US Dollar", "USD", 84000], "SAP": ["SAP SE (NYSE)", "USD", 209], "AMD": ["Advanced Micro Devices", "USD", 160],
   "BTC-USD": ["Bitcoin USD", "USD", 65000], "ETH-USD": ["Ethereum USD", "USD", 3000],
 };
 const demoState = {};
@@ -847,6 +993,11 @@ function drawChart(cv, o){
 }
 window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(render, 150); });
 
-render(); refresh();
+(async () => {
+  try{ mcp = window.claude && window.claude.use ? await window.claude.use("mcp") : null; }catch(e){ mcp = null; }
+  if (!mcp){ startDemo("Twelve Data ist in dieser Ansicht nicht verfügbar, deshalb werden simulierte Kurse angezeigt."); return; }
+  mode = "live";
+  $("#demoTag").innerHTML = '<span class="live">LIVE · TWELVE DATA</span>';
+  render(); countdown = everySec; tick();
+})();
 </script>
-
