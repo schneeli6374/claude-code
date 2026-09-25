@@ -3,7 +3,13 @@
 Live-Aktienkurse mehrerer Firmen mit ~40 technischen Indikatoren und automatischen
 Kauf-/Verkaufstipps. Aktualisiert sich alle 10 Sekunden, solange die Seite geöffnet und sichtbar ist.
 
-## Start
+## Variante 1: `aktien_dashboard.html` (einfach doppelklicken)
+
+Eine einzige Datei, keine Installation. Öffnet sich im Browser und lädt die Kurse direkt
+bzw. über öffentliche CORS-Proxys von Yahoo Finance. Sind diese nicht erreichbar, erscheint
+ein Hinweis mit der Option, Demo-Daten anzuzeigen.
+
+## Variante 2: `aktien_dashboard.py` (zuverlässigere Datenabfrage)
 
 ```bash
 python aktien_dashboard.py          # echte Kurse (Yahoo Finance)
