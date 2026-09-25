@@ -820,11 +820,23 @@ tr.grp td{background:var(--panel2);font-weight:700;color:var(--accent)}
 .tablewrap{overflow-x:auto}
 footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
 .err{color:var(--down);font-size:13px}
+.startup{grid-column:1/-1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;line-height:1.6;max-width:760px}
+.banner{background:rgba(255,92,92,.12);border:1px solid var(--down);border-radius:8px;padding:10px 12px;margin:12px 16px 0}
 .tabs{display:flex;gap:6px;margin-bottom:6px}.tabs button{padding:4px 10px;font-size:12px}
 .tabs button:not(.on){background:transparent;color:var(--muted);border:1px solid var(--line)}
 </style>
 </head>
 <body>
+<div id="jsErr" class="banner" style="display:none;margin:12px 16px"></div>
+<script>
+  // Zeigt Fehler sichtbar an, statt dass die Seite nur leer bleibt (bewusst altes JavaScript).
+  window.addEventListener("error", function (e) {
+    var b = document.getElementById("jsErr");
+    if (!b) return;
+    b.style.display = "block";
+    b.textContent = "Fehler im Dashboard: " + (e.message || e) + ". Bitte einen aktuellen Browser verwenden (Chrome, Edge, Firefox oder Safari).";
+  });
+</script>
 <header>
   <h1>📈 Aktien-Dashboard<span id="demoTag"></span></h1>
   <form id="addForm" style="display:flex;gap:6px;flex-wrap:wrap">
@@ -841,7 +853,14 @@ footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
     <button class="ghost" id="nowBtn">Jetzt aktualisieren</button></div>
 </header>
 <main>
-  <div class="grid" id="grid"></div>
+  <div class="grid" id="grid"><div class="startup" id="startup">
+    <b>Das Dashboard startet …</b><br>
+    Bleibt diese Meldung stehen, wird die Datei in einer Vorschau ohne JavaScript angezeigt,
+    z. B. in der Claude-App, einer E-Mail-Vorschau oder der Dateien-App auf dem iPhone.
+    Dann funktionieren weder die Kurse noch der Knopf „Hinzufügen“.<br><br>
+    <b>So klappt es:</b> Datei speichern, dann mit einem Browser öffnen,
+    also am PC Rechtsklick → „Öffnen mit“ → Chrome, Edge oder Firefox, am Mac Safari oder Chrome.
+  </div></div>
   <section id="detail"></section>
 </main>
 <footer>Daten: Yahoo Finance (evtl. verzögert). Aktualisierung alle 10 Sekunden, solange die Seite sichtbar ist.<br>
@@ -894,8 +913,9 @@ document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) refresh
 function render(){
   const g = $("#grid");
   let list = symbols.slice();
-  if (sortBy === "score") list.sort((a,b)=>((data[b]?.total?.score)??-9)-((data[a]?.total?.score)??-9));
-  if (sortBy === "chg") list.sort((a,b)=>((data[b]?.changePct)??-999)-((data[a]?.changePct)??-999));
+  const num = (s, f, d) => (data[s] && !data[s].error) ? f(data[s]) : d;
+  if (sortBy === "score") list.sort((a,b)=>num(b, x => x.total.score, -9) - num(a, x => x.total.score, -9));
+  if (sortBy === "chg") list.sort((a,b)=>num(b, x => x.changePct, -999) - num(a, x => x.changePct, -999));
   g.innerHTML = list.map(s => {
     const d = data[s];
     if (!d) return `<div class="card" data-s="${esc(s)}"><div class="sym">${esc(s)}</div><div class="nm">lade …</div></div>`;
@@ -1037,7 +1057,7 @@ function drawChart(cv, o){
   (o.hlines||[]).forEach(h => vals.push(h[0]));
   if (o.zeroBase) vals.push(0);
   if (!vals.length) return;
-  let lo = o.yMin ?? Math.min(...vals), hi = o.yMax ?? Math.max(...vals);
+  let lo = o.yMin != null ? o.yMin : Math.min(...vals), hi = o.yMax != null ? o.yMax : Math.max(...vals);
   if (hi === lo){ hi += 1; lo -= 1; }
   if (o.yMin == null && !o.zeroBase){ const m = (hi-lo)*0.05; hi += m; lo -= m; }
   const n = o.n, cw = (W-pl-pr)/n;
