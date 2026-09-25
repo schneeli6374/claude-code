@@ -1,79 +1,193 @@
 <title>Aktien-Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-:root{color-scheme:dark;--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--line:#2a3340;--text:#e6edf3;--muted:#8b98a8;
---up:#2ecc71;--down:#ff5c5c;--neutral:#e3b341;--accent:#58a6ff;--sma50:#f0883e;--sma200:#bc8cff}
+:root{
+  --bg:#f3f5f8; --surface:#ffffff; --surface2:#edf1f6; --line:#dce2ea; --text:#111a26; --muted:#5b6879;
+  --accent:#3452d1; --accent-soft:rgba(52,82,209,.1); --on-accent:#ffffff;
+  --up:#0b8a4f; --up-soft:rgba(11,138,79,.11); --on-up:#ffffff;
+  --down:#cf2f25; --down-soft:rgba(207,47,37,.1); --on-down:#ffffff;
+  --warn:#9a6310; --warn-soft:rgba(190,125,20,.13);
+  --chart-grid:rgba(17,26,38,.07); --chart-text:#6a7688;
+  --c-sma20:#3452d1; --c-sma50:#d9620b; --c-sma200:#8e37b0; --c-band:rgba(52,82,209,.07); --c-band-line:rgba(52,82,209,.32);
+  --shadow:0 1px 2px rgba(17,26,38,.05),0 2px 8px rgba(17,26,38,.04);
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --cond:"IBM Plex Sans Condensed","IBM Plex Sans",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  --r:12px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0b1017; --surface:#121a24; --surface2:#1a2431; --line:#253242; --text:#e5ecf4; --muted:#8e9bad;
+    --accent:#8ea6ff; --accent-soft:rgba(142,166,255,.13); --on-accent:#0b1017;
+    --up:#39d292; --up-soft:rgba(57,210,146,.13); --on-up:#04150d;
+    --down:#ff6f66; --down-soft:rgba(255,111,102,.13); --on-down:#1d0503;
+    --warn:#f0c05a; --warn-soft:rgba(240,192,90,.13);
+    --chart-grid:rgba(229,236,244,.07); --chart-text:#8e9bad;
+    --c-sma20:#8ea6ff; --c-sma50:#ffa654; --c-sma200:#d98cf5; --c-band:rgba(142,166,255,.08); --c-band-line:rgba(142,166,255,.32);
+    --shadow:none; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0b1017; --surface:#121a24; --surface2:#1a2431; --line:#253242; --text:#e5ecf4; --muted:#8e9bad;
+  --accent:#8ea6ff; --accent-soft:rgba(142,166,255,.13); --on-accent:#0b1017;
+  --up:#39d292; --up-soft:rgba(57,210,146,.13); --on-up:#04150d;
+  --down:#ff6f66; --down-soft:rgba(255,111,102,.13); --on-down:#1d0503;
+  --warn:#f0c05a; --warn-soft:rgba(240,192,90,.13);
+  --chart-grid:rgba(229,236,244,.07); --chart-text:#8e9bad;
+  --c-sma20:#8ea6ff; --c-sma50:#ffa654; --c-sma200:#d98cf5; --c-band:rgba(142,166,255,.08); --c-band-line:rgba(142,166,255,.32);
+  --shadow:none; color-scheme:dark;
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:rgba(13,17,23,.95);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);
-padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
-h1{font-size:18px;margin:0 12px 0 0;white-space:nowrap}
-.demo{background:var(--neutral);color:#000;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700;margin-left:6px}
-input{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-size:14px;width:230px;max-width:100%}
-button{background:var(--accent);color:#04111f;border:0;border-radius:6px;padding:7px 12px;font-weight:600;cursor:pointer}
-button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
-.status{margin-left:auto;color:var(--muted);font-size:12px;display:flex;gap:10px;align-items:center}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--up);display:inline-block}
-.dot.paused{background:var(--neutral)} .dot.err{background:var(--down)}
-main{padding:16px;max-width:1500px;margin:0 auto}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;position:relative;transition:border-color .15s}
-.card:hover,.card.sel{border-color:var(--accent)}
-.card .top{display:flex;justify-content:space-between;gap:8px}
-.card .sym{font-weight:700;font-size:15px}.card .nm{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-.card .px{font-size:20px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
-.chg{font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
-.up{color:var(--up)}.down{color:var(--down)}.neu{color:var(--neutral)}
-.badge{display:inline-block;padding:3px 8px;border-radius:5px;font-weight:700;font-size:12px}
-.b-sb{background:#1f8b4c;color:#fff}.b-b{background:rgba(46,204,113,.18);color:var(--up)}
-.b-n{background:rgba(227,179,65,.15);color:var(--neutral)}.b-s{background:rgba(255,92,92,.18);color:var(--down)}.b-ss{background:#b83232;color:#fff}
-.meter{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--down),var(--neutral),var(--up));position:relative;margin:8px 0 4px}
-.meter i{position:absolute;top:-4px;width:4px;height:14px;background:#fff;border-radius:2px;transform:translateX(-2px)}
-.rm{position:absolute;top:6px;right:8px;color:var(--muted);background:none;padding:0 4px;font-size:16px;display:none}
-.card:hover .rm{display:block}
-.card canvas{width:100%;height:44px;display:block;margin-top:6px}
-.cnt{font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
-.flash-up{animation:fu 1s}.flash-down{animation:fd 1s}
-@keyframes fu{from{background:rgba(46,204,113,.35)}}@keyframes fd{from{background:rgba(255,92,92,.35)}}
-#detail{margin-top:18px;display:none}
-.dhead{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
-.dhead h2{margin:0;font-size:22px}.dhead .sub{color:var(--muted);font-size:13px}
-.dgrid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px}
-@media(max-width:1000px){.dgrid{grid-template-columns:minmax(0,1fr)}}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
-.panel h3{margin:0 0 8px;font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
-.chart{width:100%;display:block}
-.legend{font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px}
-.legend b{display:inline-block;width:10px;height:3px;vertical-align:middle;margin-right:4px}
-table{width:100%;border-collapse:collapse;font-size:13px}
-td,th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-th{color:var(--muted);font-weight:600;font-size:12px}
-td.v{font-variant-numeric:tabular-nums;white-space:nowrap}
-tr.grp td{background:var(--panel2);font-weight:700;color:var(--accent)}
-.sig{font-weight:700;white-space:nowrap}
-.tip{border-left:4px solid var(--accent);padding:10px 12px;background:var(--panel2);border-radius:6px}
-.tip .hl{font-size:16px;font-weight:700;margin-bottom:6px}
-.tip ul{margin:6px 0;padding-left:18px}
-.warn{color:var(--neutral);font-size:13px;margin-top:6px}
-.sumrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin-bottom:12px}
-.sumrow .panel{padding:10px}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}.kv span:nth-child(odd){color:var(--muted)}
-.tablewrap{overflow-x:auto}
-footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
-.err{color:var(--down);font-size:13px}
-.startup{grid-column:1/-1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;line-height:1.6;max-width:760px}
-.sel{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px}
-.live{background:rgba(46,204,113,.15);color:var(--up);border:1px solid rgba(46,204,113,.4);border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700;margin-left:6px;vertical-align:middle}
-.usage{display:block;margin-top:4px;color:var(--muted)}
-.wait{color:var(--muted);font-size:12px;margin-top:6px}
-.when{font-size:11px;color:var(--muted);margin-top:4px}
-.b-wb{background:transparent;color:var(--up);border:1px solid rgba(46,204,113,.55)}.b-ws{background:transparent;color:var(--down);border:1px solid rgba(255,92,92,.55)}
-.rel{font-size:11px;color:var(--text);margin-top:4px}.evid{font-size:13px;margin:4px 0 8px;color:var(--text)}
-ul.contra li::marker{color:var(--down)}.sig.muted{color:var(--muted);font-weight:600}
-.note{background:rgba(227,179,65,.1);border:1px solid rgba(227,179,65,.45);border-radius:8px;padding:10px 12px;margin-bottom:12px;line-height:1.5;max-width:1100px}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 var(--font);-webkit-font-smoothing:antialiased}
+.wrap{max-width:1240px;margin:0 auto;padding-inline:16px}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.up{color:var(--up)} .down{color:var(--down)} .muted{color:var(--muted)}
+.eyebrow{font:600 11px/1.3 var(--cond);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h2,h3{text-wrap:balance}
+button,select,input{font:inherit;color:inherit}
+.btn{background:var(--accent);color:var(--on-accent);border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer;white-space:nowrap}
+.btn.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
+.btn:focus-visible,.chip:focus-visible,.card:focus-visible,select:focus-visible,input:focus-visible,.tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+select,input[type=text]{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+
+/* Kopfzeile */
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);border-bottom:1px solid var(--line)}
+@supports (backdrop-filter:blur(8px)){header.top{background:color-mix(in srgb,var(--bg) 86%,transparent);backdrop-filter:blur(8px)}}
+.bar{display:flex;align-items:center;gap:12px;padding-block:10px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand svg{flex:none}
+.title{font:700 17px/1.2 var(--font);letter-spacing:-.01em}
+.src{display:inline-block;margin-top:2px;font:600 10.5px/1 var(--cond);letter-spacing:.08em;text-transform:uppercase;padding:3px 7px;border-radius:4px;background:var(--surface2);color:var(--muted)}
+.src.live{background:var(--up-soft);color:var(--up)} .src.sim{background:var(--warn-soft);color:var(--warn)}
+.status{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--up);flex:none}
+.dot.paused{background:var(--warn)} .dot.err{background:var(--down)}
+
+/* Steuerung */
+.controls{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;padding-block:14px}
+.add{display:flex;gap:8px;flex-wrap:wrap}
+.add input{width:220px;max-width:100%}
+.hz{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.chips{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:3px;gap:2px}
+.chip{border:0;background:transparent;border-radius:6px;padding:5px 10px;font:600 13px/1 var(--cond);cursor:pointer;color:var(--muted)}
+.chip.on{background:var(--accent);color:var(--on-accent)}
+#hzRange{width:150px;accent-color:var(--accent)}
+.hzval{font:600 13px var(--mono);min-width:88px}
+.opts{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+
+/* Hinweise */
+.note{font-size:13px;color:var(--muted);margin-bottom:14px}
+.note b{color:var(--text)}
+.note details{display:inline}
+.note summary{display:inline;cursor:pointer;color:var(--accent);font-weight:600}
+.note .more{display:block;margin-top:6px;max-width:80ch}
+.banner{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:var(--down-soft);border:1px solid var(--down);color:var(--text);border-radius:10px;padding:10px 14px;margin-bottom:14px}
 .banner[hidden]{display:none}
-.banner{background:rgba(255,92,92,.12);border:1px solid var(--down);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.tabs{display:flex;gap:6px;margin-bottom:6px}.tabs button{padding:4px 10px;font-size:12px}
-.tabs button:not(.on){background:transparent;color:var(--muted);border:1px solid var(--line)}
+
+/* Übersicht */
+.summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(172px,1fr));gap:10px;margin-bottom:16px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;box-shadow:var(--shadow)}
+.tile[data-open]{cursor:pointer}
+.t-val{font-size:16px;font-weight:600;margin-top:4px}
+.t-sub{font-size:12px;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px;cursor:pointer;box-shadow:var(--shadow);transition:border-color .15s}
+.card:hover{border-color:var(--accent)}
+.card.err,.card.pending{cursor:default}
+.c-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.c-id{min-width:0}
+.sym{font:600 16px/1.2 var(--cond);letter-spacing:.02em}
+.nm{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.c-right{display:flex;align-items:center;gap:4px;flex:none}
+.rm{border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;padding:2px 6px;border-radius:6px;cursor:pointer;opacity:.55}
+.rm:hover{opacity:1;background:var(--surface2)}
+.c-price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.px{font-size:23px;font-weight:600;letter-spacing:-.01em}
+.cur{font-size:12px;color:var(--muted)}
+.chg{font-size:13px;font-weight:500;padding:1px 7px;border-radius:5px}
+.chg.up{background:var(--up-soft)} .chg.down{background:var(--down-soft)}
+.spark{width:100%;height:58px;display:block}
+.fc{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-top:1px solid var(--line);padding-top:8px;font-size:13px}
+.fc b{font-size:15px}
+.meta{display:flex;justify-content:space-between;gap:8px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.wait{color:var(--muted);font-size:13px}
+.errtxt{color:var(--down);font-size:13px}
+.startup{grid-column:1/-1;color:var(--muted)}
+.flash-up{animation:fu 1.2s}.flash-down{animation:fd 1.2s}
+@keyframes fu{from{background:var(--up-soft)}}@keyframes fd{from{background:var(--down-soft)}}
+@media (prefers-reduced-motion: reduce){.flash-up,.flash-down{animation:none}}
+
+/* Empfehlungs-Pillen */
+.pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font:600 12.5px/1.3 var(--cond);letter-spacing:.02em;white-space:nowrap}
+.p-sb{background:var(--up);color:var(--on-up)} .p-b{background:var(--up-soft);color:var(--up)} .p-wb{box-shadow:inset 0 0 0 1px var(--up);color:var(--up)}
+.p-ss{background:var(--down);color:var(--on-down)} .p-s{background:var(--down-soft);color:var(--down)} .p-ws{box-shadow:inset 0 0 0 1px var(--down);color:var(--down)}
+
+/* Detailseite */
+.dnav{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.dhead{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:14px}
+.dhead h2{margin:0;font-size:24px;line-height:1.2}
+.dsub{color:var(--muted);font-size:13px}
+.dprice{text-align:right}
+.dprice .px{font-size:30px}
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:0;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
+.hero > div{padding:16px 18px}
+.hero .h-fc{border-left:1px solid var(--line);background:var(--surface2)}
+.h-title{font-size:26px;font-weight:700;letter-spacing:-.015em;margin:4px 0 8px}
+.hero.dir-up .h-title{color:var(--up)} .hero.dir-down .h-title{color:var(--down)}
+.h-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
+.h-stats b{display:block;font:600 18px var(--mono)}
+.h-stats small{color:var(--muted);font-size:12px}
+.sbar{height:6px;border-radius:3px;background:var(--surface2);margin-top:6px;overflow:hidden}
+.hero .h-fc .sbar{background:var(--surface)}
+.sbar i{display:block;height:100%;border-radius:3px}
+.big{font:600 34px/1.1 var(--mono);letter-spacing:-.02em;margin:6px 0 4px}
+.h-fc .row{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;padding-block:3px;border-bottom:1px dashed var(--line)}
+.h-fc .row:last-child{border-bottom:0}
+@media (max-width:700px){.hero{grid-template-columns:minmax(0,1fr)}.hero .h-fc{border-left:0;border-top:1px solid var(--line)}}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-bottom:14px;overflow-x:auto}
+.tab{border:0;background:transparent;padding:9px 12px;font:600 14px var(--font);color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap}
+.tab.on{color:var(--text);border-bottom-color:var(--accent)}
+.cols{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px}
+@media (max-width:1000px){.cols{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow);min-width:0}
+.panel + .panel{margin-top:14px}
+.panel h3{margin:0 0 10px;font:600 12px/1.3 var(--cond);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.chart{width:100%;display:block}
+.legend{font-size:12px;color:var(--muted);display:flex;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.legend i{display:inline-block;width:12px;height:3px;border-radius:2px;vertical-align:middle;margin-right:5px}
+.subtabs{display:flex;gap:4px;margin:6px 0;flex-wrap:wrap}
+.subtabs button{border:1px solid var(--line);background:transparent;border-radius:6px;padding:4px 10px;font:600 12px var(--cond);color:var(--muted);cursor:pointer}
+.subtabs button.on{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.fine{font-size:12px;color:var(--muted);margin-top:8px}
+.tip .evid{font-size:14px;margin:0 0 10px}
+.tip ul{margin:4px 0 10px;padding-left:18px}
+.tip li{margin:2px 0}
+.tip .lbl{font:600 12px var(--cond);letter-spacing:.06em;text-transform:uppercase;margin-top:6px}
+.plan{background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:14px;margin:8px 0}
+.warn{display:flex;gap:8px;align-items:flex-start;font-size:13px;margin-top:8px;color:var(--text)}
+.warn::before{content:"!";flex:none;width:18px;height:18px;border-radius:50%;background:var(--warn-soft);color:var(--warn);font:700 12px/18px var(--mono);text-align:center}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:14px}
+.kv > span:nth-child(odd){color:var(--muted)}
+.gtiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.gtiles .tile{padding:10px 12px}
+.gtiles .cnt{display:flex;gap:10px;font:500 12px var(--mono);margin-top:6px}
+.tablewrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font:600 11.5px var(--cond);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.v{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.grp td{background:var(--surface2);font:600 12px var(--cond);letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.sig{font-weight:600;white-space:nowrap}
+.fct td{vertical-align:middle}
+.rbar{position:relative;height:10px;min-width:120px;background:var(--surface2);border-radius:5px}
+.rbar .rng{position:absolute;top:2px;bottom:2px;background:var(--accent-soft);border-radius:4px;box-shadow:inset 0 0 0 1px var(--accent)}
+.rbar .zero{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--muted)}
+.rbar .exp{position:absolute;top:-3px;width:3px;height:16px;border-radius:2px;transform:translateX(-1px)}
+tr.cur-h td{background:var(--accent-soft)}
+footer.foot{color:var(--muted);font-size:12px;padding-block:28px 36px;text-align:center}
 </style>
 <div id="jsErr" class="banner" style="display:none;margin:12px 16px"></div>
 <script>
@@ -82,38 +196,55 @@ ul.contra li::marker{color:var(--down)}.sig.muted{color:var(--muted);font-weight
     var b = document.getElementById("jsErr");
     if (!b) return;
     b.style.display = "block";
-    b.textContent = "Fehler im Dashboard: " + (e.message || e) + ". Bitte einen aktuellen Browser verwenden (Chrome, Edge, Firefox oder Safari).";
+    b.textContent = "Fehler im Dashboard: " + (e.message || e) + ". Bitte die Seite neu laden.";
   });
 </script>
-<header>
-  <h1>Aktien-Dashboard<span id="demoTag"></span></h1>
-  <form id="addForm" style="display:flex;gap:6px;flex-wrap:wrap">
-    <input id="symIn" placeholder="Symbol, z. B. AAPL, ETH/USD, NFLX" autocomplete="off">
-    <button>Hinzufügen</button>
-    <button type="button" class="ghost" id="resetBtn" title="Standardliste wiederherstellen">Standard</button>
-  </form>
-  <select id="sortSel" class="sel">
-    <option value="list">Sortierung: Liste</option>
-    <option value="score">Sortierung: Signal-Stärke</option>
-    <option value="chg">Sortierung: Tagesänderung</option>
-  </select>
-  <select id="everySel" class="sel" title="Wie oft reihum ein Kurs abgefragt wird">
-    <option value="10">Takt: alle 10 s</option>
-    <option value="30">Takt: alle 30 s</option>
-    <option value="60">Takt: alle 60 s</option>
-  </select>
+<header class="top"><div class="wrap bar">
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect width="30" height="30" rx="8" fill="var(--accent)"/><path d="M6 20l5-5 4 3 8-9" fill="none" stroke="var(--on-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23" cy="9" r="2.2" fill="var(--on-accent)"/></svg>
+    <div><div class="title">Aktien-Dashboard</div><span class="src" id="srcTag">verbinde …</span></div>
+  </div>
   <div class="status"><span class="dot" id="dot"></span><span id="stat">verbinde …</span>
-    <button class="ghost" id="nowBtn">Jetzt aktualisieren</button></div>
-</header>
-<main>
+    <button class="btn ghost" id="nowBtn" type="button">Aktualisieren</button></div>
+</div></header>
+<div class="wrap controls">
+  <form id="addForm" class="add">
+    <input id="symIn" type="text" placeholder="Symbol, z. B. NFLX, ETH/USD" autocomplete="off" aria-label="Symbol hinzufügen">
+    <button class="btn">Hinzufügen</button>
+    <button type="button" class="btn ghost" id="resetBtn" title="Standardliste wiederherstellen">Standard</button>
+  </form>
+  <div class="hz" role="group" aria-label="Prognose-Zeitraum">
+    <span class="eyebrow">Prognose für</span>
+    <div class="chips" id="hzChips"></div>
+    <input type="range" id="hzRange" min="5" max="252" step="1" aria-label="Zeitraum in Handelstagen">
+    <span class="hzval" id="hzVal"></span>
+  </div>
+  <div class="opts">
+    <select id="sortSel" aria-label="Sortierung">
+      <option value="list">Sortierung: Liste</option>
+      <option value="fc">Sortierung: Prognose</option>
+      <option value="score">Sortierung: Signalstärke</option>
+      <option value="chg">Sortierung: Tagesänderung</option>
+    </select>
+    <select id="everySel" aria-label="Abfragetakt">
+      <option value="10">Takt: alle 10 s</option>
+      <option value="30">Takt: alle 30 s</option>
+      <option value="60">Takt: alle 60 s</option>
+    </select>
+  </div>
+</div>
+<main class="wrap">
   <div class="note" id="note">Verbinde mit Twelve Data …</div>
   <div id="banner" class="banner" hidden><span id="bannerText"></span>
-    <button id="bannerDemo" hidden>Simulierte Kurse anzeigen</button></div>
-  <div class="grid" id="grid"><div class="startup" id="startup"><b>Das Dashboard startet …</b></div></div>
-  <section id="detail"></section>
+    <button class="btn" id="bannerDemo" type="button" hidden>Simulierte Kurse anzeigen</button></div>
+  <section id="overview">
+    <div class="summary" id="summary"></div>
+    <div class="grid" id="grid"><div class="startup" id="startup">Das Dashboard startet …</div></div>
+  </section>
+  <section id="detail" hidden></section>
 </main>
-<footer>Kurse: Twelve Data über deinen verbundenen Connector (Tageskerzen + reihum aktualisierte Live-Kurse).<br>
-⚠️ Die Kauf-/Verkaufstipps werden automatisch aus technischen Indikatoren berechnet und sind <b>keine Anlageberatung</b>. Investieren auf eigenes Risiko.</footer>
+<footer class="wrap foot">Kurse: Twelve Data über deinen verbundenen Connector. Prognosen beruhen auf der bisherigen Kursentwicklung und sind keine Garantie.<br>
+Die Kauf- und Verkaufstipps werden automatisch aus technischen Indikatoren berechnet und sind <b>keine Anlageberatung</b>. Investieren auf eigenes Risiko.</footer>
 <script>
 // ---------------------------------------------------------------------
 // Einstellungen
@@ -128,17 +259,20 @@ const DEFAULT = ["NVDA","AAPL","BTC/USD","MSFT","AMZN","GOOGL","META","TSLA","SA
 const NAMES = {NVDA:"NVIDIA", AAPL:"Apple", "BTC/USD":"Bitcoin", MSFT:"Microsoft", AMZN:"Amazon",
   GOOGL:"Alphabet (Google)", META:"Meta Platforms", TSLA:"Tesla", SAP:"SAP (Börse New York)", AMD:"AMD"};
 const MIC = {DE:"XETR", F:"XFRA", L:"XLON", PA:"XPAR", AS:"XAMS", MI:"XMIL", SW:"XSWX", TO:"XTSE", HK:"XHKG", VI:"XWBO"};
+const HORIZONS = [["1 W", 5], ["2 W", 10], ["1 M", 21], ["3 M", 63], ["6 M", 126], ["1 J", 252]];
 
 let symbols = load("symbols", DEFAULT);
 let selected = load("selected", null);
 let sortBy = load("sort", "list");
 let everySec = load("every", 10);
 let chartTab = load("tab", "signal");
+let dTab = load("dtab", "overview");
+let horizon = load("horizon", 21);
 let data = {}, lastPrice = {}, busy = false, countdown = 0;
 let mcp = null, mode = "start";     // "start" | "live" | "demo"
 let DEMO = false;
-const store = {};                   // Symbol -> {candles, name, currency, exchange, marketOpen, marketTime, quotedAt, nextQuoteAt, error}
-let rr = 0, lastLive = "";          // Reihum-Zeiger
+const store = {};
+let rr = 0, lastLive = "";
 let pausedUntil = 0, dayOut = false, fatal = null, transient = "";
 const callTimes = [];
 
@@ -147,24 +281,22 @@ function save(k, v){ try{ localStorage.setItem("td_"+k, JSON.stringify(v)); }cat
 const $ = s => document.querySelector(s);
 const nf = (x, d=2) => x==null||isNaN(x) ? "–" : x.toLocaleString("de-DE",{minimumFractionDigits:d, maximumFractionDigits:d});
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function badgeCls(l){ return {"Starker Kauf":"b-sb","Kaufen":"b-b","Eher kaufen":"b-wb","Eher verkaufen":"b-ws","Verkaufen":"b-s","Starker Verkauf":"b-ss"}[l] || "b-n"; }
-const meterPos = s => (50 + 50 * Math.max(-1, Math.min(1, s / 0.6))).toFixed(1);
+const sp = (v, d = 1) => v == null || !isFinite(v) ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "±") + nf(Math.abs(100 * v), d) + " %";
+const pc = (v, d = 0) => v == null || !isFinite(v) ? "–" : nf(100 * v, d) + " %";
+function pillCls(l){ return {"Starker Kauf":"p-sb","Kaufen":"p-b","Eher kaufen":"p-wb","Eher verkaufen":"p-ws","Verkaufen":"p-s","Starker Verkauf":"p-ss"}[l] || "p-wb"; }
 function sigTxt(x){
   if (x.info) return '<span class="sig muted">Info</span>';
   const s = x.signal;
   return s >= 0.5 ? '<span class="sig up">▲ Kauf</span>' : s > 0 ? '<span class="sig up">△ eher Kauf</span>'
-       : s <= -0.5 ? '<span class="sig down">▼ Verkauf</span>' : s < 0 ? '<span class="sig down">▽ eher Verkauf</span>' : '<span class="sig neu">○ neutral</span>';
+       : s <= -0.5 ? '<span class="sig down">▼ Verkauf</span>' : s < 0 ? '<span class="sig down">▽ eher Verkauf</span>' : '<span class="sig muted">○ neutral</span>';
 }
 const todayUTC = () => new Date().toISOString().slice(0, 10);
 const usedToday = () => load("used_" + todayUTC(), 0);
 const hhmm = ms => new Date(ms).toLocaleTimeString("de-DE", {hour: "2-digit", minute: "2-digit"});
-
-// Symbol-Schreibweisen: Yahoo-Format (BTC-USD, SAP.DE) in Twelve-Data-Format umwandeln
 function normSym(raw){
   let s = raw.trim().toUpperCase();
   if (!s) return null;
-  s = s.replace(/^([A-Z0-9]{2,6})-(USD|EUR|USDT|GBP|CHF)$/, "$1/$2");
-  return s;
+  return s.replace(/^([A-Z0-9]{2,6})-(USD|EUR|USDT|GBP|CHF)$/, "$1/$2");
 }
 function tdArgs(sym){
   let m = sym.match(/^(.+)\.([A-Z]{1,2})$/);
@@ -341,21 +473,77 @@ async function tick(force){
   render();
 }
 
+
+
 // ---------------------------------------------------------------------
-// Anzeige von Status, Hinweisen und Fehlern
+// Prognose: Wie hat sich der Kurs nach ähnlichen Signalen entwickelt?
+// ---------------------------------------------------------------------
+function hLabel(HT){
+  if (HT >= 245 && HT <= 260) return "1 Jahr";
+  if (HT < 20){ const w = Math.round(HT / 5 * 2) / 2; return (w % 1 ? nf(w, 1) : String(w)) + (w === 1 ? " Woche" : " Wochen"); }
+  const m = Math.round(HT / 21 * 2) / 2; return (m % 1 ? nf(m, 1) : String(m)) + (m === 1 ? " Monat" : " Monate");
+}
+const bucket = s => (s >= 0 ? 1 : -1) * (Math.abs(s) >= 0.35 ? 3 : Math.abs(s) >= 0.12 ? 2 : 1);
+function quant(a, p){ const s = a.slice().sort((x, y) => x - y), i = (s.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); }
+const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+function forecast(d, HT){
+  d._fc = d._fc || {};
+  if (d._fc[HT]) return d._fc[HT];
+  const F = d.F, c = F.c, n = c.length, sc = F.score, sd = F.sd;
+  const H = d.crypto ? Math.round(HT * 365 / 252) : HT, sdNow = sd[n - 1] || 0.02;
+  const cur = sc[n - 1] != null ? sc[n - 1] : 0, b0 = d.total.dir * Math.abs(bucket(cur || 1e-9));
+  const all = [], sim = [];
+  for (let i = Math.max(F.start, 0); F.start >= 0 && i + H < n; i++){
+    if (sc[i] == null || !sd[i]) continue;
+    const ratio = Math.max(0.5, Math.min(2, sdNow / sd[i]));      // an heutige Schwankung anpassen
+    const x = Math.exp(Math.log(c[i + H] / c[i]) * ratio) - 1;
+    all.push(x); if (bucket(sc[i]) === b0) sim.push(x);
+  }
+  // Überlappende Zeiträume sind nicht unabhängig: effektive Anzahl ≈ Fälle / Zeitraum
+  const effAll = all.length / H, effSim = sim.length / H;
+  const wA = all.length >= 40 ? effAll / (effAll + 10) : 0;       // Vertrauen in die eigene Kursgeschichte (sonst: kein Trend)
+  const wS = sim.length >= 30 ? effSim / (effSim + 15) : 0;       // Vertrauen in ähnliche Signale (sonst: alle Tage)
+  const pu = a => a.filter(x => x > 0).length / a.length;
+  const emp = (fn, dflt) => all.length ? wS * (wS ? fn(sim) : 0) + (1 - wS) * fn(all) : dflt;
+  const exp = wA * emp(mean, 0);
+  const band = z => Math.exp(Math.log(1 + exp) + z * sdNow * Math.sqrt(H)) - 1;  // normale Schwankung um die Erwartung
+  const res = {H, HT, n: all.length, nSim: sim.length, w: wS, wA, exp,
+    pUp: wA * emp(pu, 0.5) + (1 - wA) * 0.5,
+    lo: Math.min(exp, wA * emp(a => quant(a, 0.1), 0) + (1 - wA) * band(-1.2816)),
+    hi: Math.max(exp, wA * emp(a => quant(a, 0.9), 0) + (1 - wA) * band(1.2816)),
+    few: effAll < 12, acc: all.length >= 40 ? fcAccuracy(F, H) : null};
+  d._fc[HT] = res;
+  return res;
+}
+// Rückblick: Wie oft lag die Prognose-Richtung früher richtig? (nur mit damals bekannten Daten)
+function fcAccuracy(F, H){
+  const c = F.c, sc = F.score, n = c.length, st = {};
+  let aN = 0, aSum = 0, hits = 0, tot = 0, ups = 0;
+  for (let i = F.start; i + H < n; i++){
+    const j = i - H;
+    if (j >= F.start && sc[j] != null){ const r = c[i] / c[j] - 1, e = st[bucket(sc[j])] = st[bucket(sc[j])] || [0, 0]; e[0]++; e[1] += r; aN++; aSum += r; }
+    if (sc[i] == null || aN < 60) continue;
+    const e = st[bucket(sc[i])] || [0, 0], eff = e[0] / H, w = e[0] >= 30 ? eff / (eff + 15) : 0;
+    const pred = w * (e[0] ? e[1] / e[0] : 0) + (1 - w) * aSum / aN, act = c[i + H] / c[i] - 1;
+    if (!pred || !act) continue;
+    tot++; if (Math.sign(pred) === Math.sign(act)) hits++; if (act > 0) ups++;
+  }
+  return tot / H >= 8 && tot >= 30 ? {hit: hits / tot, base: Math.max(ups / tot, 1 - ups / tot), n: tot} : null;
+}
+
+// ---------------------------------------------------------------------
+// Status, Hinweise, Fehler
 // ---------------------------------------------------------------------
 function updateNote(){
   if (mode === "demo") return;
-  const used = usedToday();
-  $("#note").innerHTML = `<b>Echte Kurse von Twelve Data.</b> Dein kostenloser Tarif erlaubt 800 Abfragen pro Tag und 8 pro Minute.
-    Deshalb wird alle ${everySec} s <b>reihum ein Wert</b> aktualisiert, jeder Wert höchstens einmal pro Minute, bei geschlossener Börse nur alle 15 Minuten.
-    Die Kurshistorie wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten.
-    <span class="usage">Heute von dieser Seite genutzt: <b>${used}</b> von ${DAY_LIMIT}</span>`;
+  $("#note").innerHTML = `<b>Echte Kurse von Twelve Data.</b> Alle ${everySec} s wird reihum ein Wert aktualisiert · heute <b class="num">${usedToday()}</b> von ${DAY_LIMIT} Abfragen genutzt ·
+    <details><summary>So funktioniert es</summary><span class="more">Dein kostenloser Tarif erlaubt 800 Abfragen pro Tag und 8 pro Minute. Deshalb wird reihum ein Wert aktualisiert, jeder höchstens einmal pro Minute,
+    bei geschlossener Börse nur alle 15 Minuten. Die Kurshistorie (etwa 4 Jahre) wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten, SAP gibt es aber über die Börse New York.</span></details>`;
 }
 function updateBanner(){
   let txt = "", demoBtn = false;
   if (fatal){ txt = fatalText(fatal); demoBtn = true; }
-  else if (dayOut || usedToday() >= DAY_LIMIT - DAY_RESERVE){ txt = "Das Tageskontingent von Twelve Data ist (fast) aufgebraucht. Die Kurse bleiben auf dem letzten Stand. Ab 2 Uhr nachts (deutscher Zeit) geht es automatisch weiter."; }
+  else if (mode === "live" && (dayOut || usedToday() >= DAY_LIMIT - DAY_RESERVE)) txt = "Das Tageskontingent von Twelve Data ist (fast) aufgebraucht. Die Kurse bleiben auf dem letzten Stand. Ab 2 Uhr nachts (deutscher Zeit) geht es automatisch weiter.";
   $("#bannerText").textContent = txt;
   $("#bannerDemo").hidden = !demoBtn;
   $("#banner").hidden = !txt;
@@ -363,24 +551,23 @@ function updateBanner(){
 function updateStatus(){
   const st = $("#stat"), dot = $("#dot");
   if (mode === "start"){ st.textContent = "verbinde …"; return; }
-  if (document.hidden){ dot.className = "dot paused"; st.textContent = "pausiert (Tab nicht sichtbar)"; return; }
+  if (document.hidden){ dot.className = "dot paused"; st.textContent = "pausiert"; return; }
   if (mode === "demo"){ dot.className = "dot"; st.textContent = "Simulation · nächste in " + Math.max(countdown, 0) + " s"; return; }
-  if (fatal){ dot.className = "dot err"; st.textContent = "keine Verbindung zu Twelve Data"; return; }
+  if (fatal){ dot.className = "dot err"; st.textContent = "keine Verbindung"; return; }
   if (dayOut || usedToday() >= DAY_LIMIT - DAY_RESERVE){ dot.className = "dot err"; st.textContent = "Tageskontingent aufgebraucht"; return; }
   const now = Date.now();
   while (callTimes.length && now - callTimes[0] > 60000) callTimes.shift();
   if (busy){ dot.className = "dot"; st.textContent = "lade Kurse …"; return; }
   if (now < pausedUntil || callTimes.length >= MIN_LIMIT){
     const wait = Math.ceil(((now < pausedUntil ? pausedUntil : callTimes[0] + 60000) - now) / 1000);
-    dot.className = "dot paused"; st.textContent = "Minutenlimit erreicht · weiter in " + wait + " s"; return;
+    dot.className = "dot paused"; st.textContent = "Minutenlimit · weiter in " + wait + " s"; return;
   }
   dot.className = transient ? "dot paused" : "dot";
   const pending = symbols.filter(s => !store[s] || (!store[s].candles && !store[s].error)).length;
   st.textContent = transient ? transient
-    : pending ? `lade Historie (${symbols.length - pending}/${symbols.length}) · nächste in ${Math.max(countdown, 0)} s`
+    : pending ? `lade Historie ${symbols.length - pending}/${symbols.length} · ${Math.max(countdown, 0)} s`
     : `Live${lastLive ? " · zuletzt " + lastLive : ""} · nächste in ${Math.max(countdown, 0)} s`;
 }
-
 setInterval(() => {
   if (!document.hidden && mode !== "start"){
     countdown--;
@@ -388,63 +575,225 @@ setInterval(() => {
   }
   updateStatus();
 }, 1000);
-document.addEventListener("visibilitychange", () => { if (!document.hidden){ countdown = 1; } });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) countdown = 1; });
 
-function render(){
-  const g = $("#grid");
+// ---------------------------------------------------------------------
+// Übersicht
+// ---------------------------------------------------------------------
+const ready = s => data[s] && !data[s].error;
+function whenTxt(d){
+  if (mode === "demo") return "simuliert";
+  if (d.quotedAt) return "aktualisiert " + hhmm(d.quotedAt) + (d.marketOpen === false ? " · Börse zu" : "");
+  return "Stand " + new Date(d.marketTime * 1000).toLocaleDateString("de-DE", {timeZone: "UTC"});
+}
+const rmBtn = s => `<button class="rm" type="button" data-rm="${esc(s)}" aria-label="${esc(s)} entfernen" title="Entfernen">×</button>`;
+function cardHTML(s){
+  const d = data[s];
+  if (!d) return `<div class="card pending" data-s="${esc(s)}"><div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div><div class="nm">${esc(NAMES[s] || "")}</div></div>${rmBtn(s)}</div><div class="wait">wartet auf Kursdaten …</div></div>`;
+  if (d.error) return `<div class="card err" data-s="${esc(s)}"><div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div></div>${rmBtn(s)}</div><div class="errtxt">${esc(d.error)}</div></div>`;
+  const f = forecast(d, horizon);
+  let flash = "";
+  if (lastPrice[s] != null && lastPrice[s] !== d.price) flash = d.price > lastPrice[s] ? "flash-up" : "flash-down";
+  lastPrice[s] = d.price;
+  return `<div class="card ${flash}" role="button" tabindex="0" data-s="${esc(s)}" aria-label="${esc(d.name)}: Details öffnen">
+    <div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div></div>
+      <div class="c-right"><span class="pill ${pillCls(d.total.label)}">${esc(d.total.label)}</span>${rmBtn(s)}</div></div>
+    <div class="c-price"><span class="px num">${nf(d.price)}</span><span class="cur">${esc(d.currency)}</span><span class="chg num ${d.change >= 0 ? "up" : "down"}">${sp(d.changePct / 100, 2)}</span></div>
+    <canvas class="spark" data-spark="${esc(s)}" aria-hidden="true"></canvas>
+    <div class="fc"><span>Prognose ${esc(hLabel(horizon))}</span><span><b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp)}</b> <span class="muted">· Anstieg ${pc(f.pUp)}</span></span></div>
+    <div class="meta"><span>Stärke ${d.total.strength} % · Verlässlichkeit ${esc(d.total.reliability)}</span><span>${esc(whenTxt(d))}</span></div>
+  </div>`;
+}
+function renderSummary(){
+  const ds = symbols.filter(ready).map(s => data[s]);
+  if (!ds.length){ $("#summary").innerHTML = ""; return; }
+  const nb = ds.filter(d => d.total.dir > 0).length, ns = ds.length - nb;
+  const fcs = ds.map(d => [d, forecast(d, horizon)]).sort((a, b) => b[1].exp - a[1].exp);
+  const [bd, bf] = fcs[0], [wd, wf] = fcs[fcs.length - 1];
+  const t = (label, d, f) => `<div class="tile" data-open="${esc(d.symbol)}" role="button" tabindex="0"><div class="eyebrow">${label} · ${esc(hLabel(horizon))}</div>
+    <div class="t-val">${esc(d.symbol)} <b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp)}</b></div><div class="t-sub">${esc(d.name)} · Anstieg ${pc(f.pUp)}</div></div>`;
+  $("#summary").innerHTML = `
+    <div class="tile"><div class="eyebrow">Signale in deiner Liste</div>
+      <div class="t-val"><span class="up">${nb} × Kaufen</span> · <span class="down">${ns} × Verkaufen</span></div>
+      <div class="sbar" style="display:flex"><i style="width:${100 * nb / ds.length}%;background:var(--up)"></i><i style="width:${100 * ns / ds.length}%;background:var(--down)"></i></div></div>
+    ${t("Beste Prognose", bd, bf)}${fcs.length > 1 ? t("Schwächste Prognose", wd, wf) : ""}
+    <div class="tile"><div class="eyebrow">${mode === "demo" ? "Datenquelle" : "Twelve Data heute"}</div>
+      <div class="t-val num">${mode === "demo" ? "Simulation" : usedToday() + " / " + DAY_LIMIT}</div><div class="t-sub">${mode === "demo" ? "keine echten Kurse" : "Abfragen verbraucht"}</div></div>`;
+}
+function renderOverview(){
   let list = symbols.slice();
-  const num = (s, f, d) => (data[s] && !data[s].error) ? f(data[s]) : d;
-  if (sortBy === "score") list.sort((a,b)=>num(b, x => x.total.score, -9) - num(a, x => x.total.score, -9));
-  if (sortBy === "chg") list.sort((a,b)=>num(b, x => x.changePct, -999) - num(a, x => x.changePct, -999));
-  g.innerHTML = list.map(s => {
-    const d = data[s];
-    if (!d) return `<div class="card" data-s="${esc(s)}"><button class="rm" data-rm="${esc(s)}" title="entfernen">×</button><div class="sym">${esc(s)}</div><div class="nm">${esc(NAMES[s] || "")}</div><div class="wait">wartet auf Kursdaten …</div></div>`;
-    if (d.error) return `<div class="card" data-s="${esc(s)}"><button class="rm" data-rm="${esc(s)}" title="entfernen">×</button><div class="sym">${esc(s)}</div><div class="err">⚠ ${esc(d.error)}</div></div>`;
-    const cls = d.change >= 0 ? "up" : "down";
-    const pos = meterPos(d.total.dir * d.total.strength / 100 * 0.6);
-    let flash = "";
-    if (lastPrice[s] != null && lastPrice[s] !== d.price) flash = d.price > lastPrice[s] ? "flash-up" : "flash-down";
-    lastPrice[s] = d.price;
-    const when = mode === "demo" ? "simuliert"
-      : d.quotedAt ? "aktualisiert " + hhmm(d.quotedAt) + (d.marketOpen === false ? " · Börse zu" : "")
-      : "Stand " + new Date(d.marketTime * 1000).toLocaleDateString("de-DE", {timeZone: "UTC"});
-    return `<div class="card ${s===selected?"sel":""} ${flash}" data-s="${esc(s)}">
-      <button class="rm" data-rm="${esc(s)}" title="entfernen">×</button>
-      <div class="top"><div><div class="sym">${esc(s)}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div></div>
-      <div><div class="px">${nf(d.price)} <small style="font-size:11px;color:var(--muted)">${esc(d.currency)}</small></div>
-      <div class="chg ${cls}">${d.change>=0?"+":""}${nf(d.change)} (${d.change>=0?"+":""}${nf(d.changePct)} %)</div></div></div>
-      <canvas data-spark="${esc(s)}"></canvas>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
-        <span class="badge ${badgeCls(d.total.label)}">${esc(d.total.label)}</span>
-        <span class="cnt"><span class="up">▲${d.total.buy}</span>&nbsp;<span class="neu">○${d.total.neutral}</span>&nbsp;<span class="down">▼${d.total.sell}</span></span>
-      </div>
-      <div class="meter"><i style="left:${pos}%"></i></div>
-      <div class="rel">Stärke ${d.total.strength} % · Verlässlichkeit ${esc(d.total.reliability)}</div>
-      <div class="when">${esc(when)}</div>
-    </div>`;
-  }).join("");
-  g.querySelectorAll("canvas[data-spark]").forEach(cv => {
-    const d = data[cv.dataset.spark]; if (!d || d.error) return;
-    const c = d.chart.c.slice(-60);
-    drawChart(cv, {n:c.length, series:[{v:c, color: c[c.length-1]>=c[0] ? "#2ecc71" : "#ff5c5c", w:1.5, fill:true}], pad:[2,2,2,2], noAxis:true});
+  const val = (s, f, d) => ready(s) ? f(data[s]) : d;
+  if (sortBy === "score") list.sort((a, b) => val(b, x => x.total.score, -9) - val(a, x => x.total.score, -9));
+  if (sortBy === "chg") list.sort((a, b) => val(b, x => x.changePct, -999) - val(a, x => x.changePct, -999));
+  if (sortBy === "fc") list.sort((a, b) => val(b, x => forecast(x, horizon).exp, -9) - val(a, x => forecast(x, horizon).exp, -9));
+  renderSummary();
+  $("#grid").innerHTML = list.map(cardHTML).join("");
+  document.querySelectorAll("canvas[data-spark]").forEach(cv => {
+    const s = cv.dataset.spark, d = data[s]; if (!ready(s)) return;
+    const c = d.chart.c.slice(-60), f = forecast(d, horizon), p = d.price;
+    drawChart(cv, {n: c.length, series: [{v: c, color: c[c.length - 1] >= c[0] ? "--up" : "--down", w: 1.6, fill: true}],
+      cone: {slots: 16, p0: p, lo: p * (1 + f.lo), hi: p * (1 + f.hi), mid: p * (1 + f.exp)}, pad: [4, 4, 4, 2], noAxis: true});
   });
+}
+function render(){
   updateNote(); updateBanner(); updateStatus();
-  renderDetail();
+  const showDetail = selected && ready(selected);
+  $("#overview").hidden = !!showDetail;
+  $("#detail").hidden = !showDetail;
+  if (showDetail) renderDetail(); else renderOverview();
 }
 
+// ---------------------------------------------------------------------
+// Detailseite
+// ---------------------------------------------------------------------
+function renderDetail(){
+  const d = data[selected], t = d.tip, R = d.reliability, f = forecast(d, horizon), up = d.total.dir > 0;
+  const time = d.marketTime ? new Date(d.marketTime * 1000).toLocaleString("de-DE") : "";
+  const conflict = Math.sign(f.exp) !== d.total.dir && Math.abs(f.exp) > 0.002;
+  const tabs = [["overview", "Übersicht"], ["forecast", "Prognose"], ["ind", `Indikatoren (${d.signals.length})`], ["back", "Rückblick & Kennzahlen"]];
+  let body = "";
+  if (dTab === "overview"){
+    body = `<div class="cols"><div>
+      <div class="panel"><h3>Kursverlauf und Prognose (${esc(hLabel(horizon))})</h3>
+        <div class="legend"><span><i style="background:var(--c-sma20)"></i>SMA 20</span><span><i style="background:var(--c-sma50)"></i>SMA 50</span>
+          <span><i style="background:var(--c-sma200)"></i>SMA 200</span><span><i style="background:var(--c-band-line)"></i>Bollinger</span><span><i style="background:var(--accent)"></i>Prognose mit 80 %-Spanne</span></div>
+        <canvas class="chart" id="cMain" style="height:340px"></canvas>
+        <canvas class="chart" id="cVol" style="height:56px"></canvas></div>
+      <div class="panel">
+        <div class="subtabs">${[["signal", "Gesamtsignal"], ["rsi", "RSI (14)"], ["macd", "MACD"], ["stoch", "Stochastik"]].map(([k, l]) => `<button type="button" data-ctab="${k}" class="${chartTab === k ? "on" : ""}">${l}</button>`).join("")}</div>
+        <canvas class="chart" id="cInd" style="height:150px"></canvas>
+        ${chartTab === "signal" ? '<div class="fine">Über 0 = Kaufsignal, unter 0 = Verkaufssignal, Tag für Tag gleich berechnet wie heute.</div>' : ""}</div>
+    </div><div>
+      <div class="panel tip"><h3>Tipp</h3>
+        <p class="evid">${esc(t.evidence)}</p>
+        ${t.reasons.length ? `<div class="lbl up">Dafür spricht</div><ul>${t.reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+        ${t.contra.length ? `<div class="lbl down">Dagegen spricht</div><ul>${t.contra.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
+        ${t.plan ? `<div class="plan">${esc(t.plan)}</div>` : ""}
+        ${conflict ? `<div class="warn">Signal und Prognose zeigen in verschiedene Richtungen: Früher ging es nach solchen Signalen im Schnitt eher ${f.exp > 0 ? "aufwärts" : "abwärts"}.</div>` : ""}
+        ${t.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join("")}
+        <div class="fine">Keine Anlageberatung. Frühere Trefferquoten sind keine Garantie.</div></div>
+    </div></div>`;
+  } else if (dTab === "forecast"){
+    const rows = HORIZONS.map(([, h]) => h);
+    if (!rows.includes(horizon)) rows.push(horizon);
+    rows.sort((a, b) => a - b);
+    const fs = rows.map(h => [h, forecast(d, h)]), span = Math.max(0.05, ...fs.map(([, x]) => Math.max(Math.abs(x.lo), Math.abs(x.hi))));
+    const xp = v => (50 + 50 * v / span).toFixed(1);
+    body = `<div class="panel"><h3>Prognose für verschiedene Zeiträume</h3><div class="tablewrap"><table class="fct">
+      <thead><tr><th>Zeitraum</th><th>Erwartet</th><th>Anstieg</th><th>80 %-Spanne</th><th>Spanne (grafisch)</th><th>Kurs ca.</th><th title="Wie oft die Richtung dieser Prognose früher gestimmt hat">Früher richtig</th></tr></thead><tbody>
+      ${fs.map(([h, x]) => `<tr class="${h === horizon ? "cur-h" : ""}"><td><b>${esc(hLabel(h))}</b>${x.few ? ' <span class="muted" title="wenig unabhängige Vergleichsfälle">*</span>' : ""}</td>
+        <td class="v ${x.exp >= 0 ? "up" : "down"}"><b>${sp(x.exp)}</b></td><td class="v">${pc(x.pUp)}</td>
+        <td class="v">${sp(x.lo, 0)} bis ${sp(x.hi, 0)}</td>
+        <td><div class="rbar"><span class="zero" style="left:50%"></span><span class="rng" style="left:${xp(x.lo)}%;width:${(xp(x.hi) - xp(x.lo)).toFixed(1)}%"></span><span class="exp" style="left:${xp(x.exp)}%;background:${x.exp >= 0 ? "var(--up)" : "var(--down)"}"></span></div></td>
+        <td class="v">${nf(d.price * (1 + x.exp))}</td>
+        <td class="v">${x.acc ? `${pc(x.acc.hit)} <span class="muted">(Basis ${pc(x.acc.base)})</span>` : "–"}</td></tr>`).join("")}
+      </tbody></table></div>
+      <div class="fine">* Wenige unabhängige Vergleichszeiträume: Die Prognose wurde deshalb stark in Richtung „kein Trend“ gezogen und ist besonders unsicher. „Früher richtig“ erscheint nur bei genug unabhängigen Zeiträumen. „Basis“ = Trefferquote, wenn man einfach immer die häufigere Richtung vorhergesagt hätte.</div></div>
+      <div class="panel"><h3>So entsteht die Prognose</h3><div class="evid" style="font-size:14px;max-width:80ch">
+        Für jeden Tag der letzten Jahre wird nachgesehen, wie sich der Kurs im gewählten Zeitraum danach entwickelt hat. Tage mit einem ähnlichen Signal wie heute
+        (gleiche Richtung und Stärke) zählen besonders. Die früheren Bewegungen werden an die heutige Schwankungsstärke angepasst: Ist die Aktie gerade unruhiger als früher, wird die Spanne breiter.
+        Gibt es wenige ähnliche Fälle, rückt die Prognose näher an den allgemeinen Durchschnitt der Aktie.
+        „Früher richtig“ zeigt, wie oft die vorhergesagte Richtung gestimmt hat, wenn man die Prognose Tag für Tag nur mit den damals bekannten Daten gemacht hätte.
+      </div></div>`;
+  } else if (dTab === "ind"){
+    const bygroup = {};
+    d.signals.forEach(s => (bygroup[s.group] = bygroup[s.group] || []).push(s));
+    body = `<div class="gtiles">${Object.entries(d.groups).map(([g, s]) => `<div class="tile"><div class="eyebrow">${esc(g)}</div>
+        <div style="margin-top:6px"><span class="pill ${pillCls(s.label)}">${esc(s.label)}</span></div>
+        <div class="cnt"><span class="up">▲${s.buy}</span><span class="muted">○${s.neutral}</span><span class="down">▼${s.sell}</span></div></div>`).join("")}</div>
+      <div class="panel"><h3>Alle Indikatoren (${d.signals.length})</h3><div class="tablewrap"><table>
+        <thead><tr><th>Indikator</th><th>Wert</th><th>Signal</th><th title="Wie oft dieser Indikator bei diesem Wert die Richtung der nächsten ${HORIZON} Handelstage richtig angezeigt hat">Treffer</th><th>Bedeutung</th></tr></thead><tbody>
+        ${Object.entries(bygroup).map(([g, arr]) => `<tr class="grp"><td colspan="5">${esc(g)}</td></tr>` + arr.map(s => `<tr><td>${esc(s.name)}</td><td class="v">${esc(s.value)}</td><td>${sigTxt(s)}</td>
+          <td class="v ${s.hit == null ? "" : s.hit >= 55 ? "up" : s.hit < 48 ? "down" : ""}">${s.hit == null ? "–" : s.hit + " %"}</td><td>${esc(s.note)}</td></tr>`).join("")).join("")}
+        </tbody></table></div>
+        <div class="fine">Treffer = wie oft der Indikator bei diesem Wert die Kursrichtung der nächsten ${HORIZON} Handelstage richtig angezeigt hat. Indikatoren mit hoher Quote zählen stärker.
+        Im Trendmarkt (ADX über 25) zählen Trend-Indikatoren mehr, im Seitwärtsmarkt die Überkauft/Überverkauft-Signale.</div></div>`;
+  } else {
+    body = `<div class="cols"><div class="panel"><h3>Treffsicherheit der Signale (${R.years ? nf(R.years, 1) + " Jahre" : "–"})</h3><div class="kv">
+        <span>Kaufsignale</span><span>${R.buyN} × · danach gestiegen <b>${pc(R.buyHit)}</b> · Ø ${sp(R.buyAvg)}</span>
+        <span>Verkaufssignale</span><span>${R.sellN} × · danach gefallen <b>${pc(R.sellHit)}</b> · Ø ${sp(R.sellAvg)}</span>
+        <span>Zum Vergleich</span><span>gestiegen in ${pc(R.upShare)} aller ${HORIZON}-Tage-Zeiträume</span>
+        <span>Heutiges Signal</span><span>Verlässlichkeit <b>${esc(R.label)}</b>${R.hitRate != null ? ` · ${pc(R.hitRate)} bei ${R.n} ${R.similar ? "ähnlichen " : ""}Fällen` : ""}</span>
+      </div><div class="fine">Jeder Tag wurde nur mit den Daten bewertet, die an diesem Tag bekannt waren. Gemessen wird die Kursrichtung ${HORIZON} Handelstage später.</div></div>
+      <div><div class="panel"><h3>Kennzahlen</h3><div class="kv">
+        <span>Tageshoch / -tief</span><span class="num">${nf(d.dayHigh)} / ${nf(d.dayLow)}</span>
+        <span>52 Wochen Hoch / Tief</span><span class="num">${nf(d.high52)} / ${nf(d.low52)}</span>
+        <span>Abstand 52W-Hoch</span><span class="num">${sp(d.price / d.high52 - 1)}</span>
+        <span>Volumen heute</span><span class="num">${d.volume ? nf(d.volume, 0) : "–"}</span></div></div>
+      <div class="panel"><h3>Pivot-Punkte (klassisch)</h3><div class="kv">
+        ${Object.entries(d.pivots).map(([k, v]) => `<span>${k}</span><span class="num ${k[0] === "R" ? "down" : k[0] === "S" ? "up" : ""}">${nf(v)}${Math.abs(v - d.price) / d.price < 0.01 ? " · nahe Kurs" : ""}</span>`).join("")}</div></div></div></div>`;
+  }
+  $("#detail").innerHTML = `
+    <div class="dnav"><button class="btn ghost" type="button" id="backBtn">← Übersicht</button>
+      <button class="btn ghost" type="button" id="rmDetail">Aus Liste entfernen</button></div>
+    <div class="dhead"><div><h2>${esc(d.name)}</h2><div class="dsub">${esc(d.symbol)}${d.exchange ? " · " + esc(d.exchange) : ""} · Letzter Kurs ${esc(time)}</div></div>
+      <div class="dprice"><span class="px num">${nf(d.price)}</span> <span class="cur">${esc(d.currency)}</span><div class="num ${d.change >= 0 ? "up" : "down"}">${d.change >= 0 ? "+" : "−"}${nf(Math.abs(d.change))} (${sp(d.changePct / 100, 2)})</div></div></div>
+    <div class="hero ${up ? "dir-up" : "dir-down"}">
+      <div><div class="eyebrow">Empfehlung</div>
+        <div class="h-title">${up ? "Kaufen ist besser" : "Verkaufen ist besser"}</div>
+        <span class="pill ${pillCls(d.total.label)}">${esc(d.total.label)}</span>
+        <div class="h-stats">
+          <div><span class="eyebrow">Signalstärke</span><b>${d.total.strength} %</b><div class="sbar"><i style="width:${d.total.strength}%;background:${up ? "var(--up)" : "var(--down)"}"></i></div></div>
+          <div><span class="eyebrow">Verlässlichkeit</span><b>${esc(R.label)}</b><small>${R.hitRate != null ? pc(R.hitRate) + " Treffer bei ähnlichen Signalen" : "zu wenig Daten"}</small></div>
+        </div></div>
+      <div class="h-fc"><div class="eyebrow">Prognose · ${esc(hLabel(horizon))}</div>
+        <div class="big ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp)}</div>
+        <div class="row"><span>Kurs ca.</span><b class="num">${nf(d.price * (1 + f.exp))} ${esc(d.currency)}</b></div>
+        <div class="row"><span>Wahrscheinlichkeit Anstieg</span><b class="num">${pc(f.pUp)}</b></div>
+        <div class="row"><span>80 %-Spanne</span><b class="num">${nf(d.price * (1 + f.lo))} – ${nf(d.price * (1 + f.hi))}</b></div>
+        <div class="row"><span>Richtung früher richtig</span><b class="num">${f.acc ? pc(f.acc.hit) : "–"}</b></div></div>
+    </div>
+    <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" class="tab ${dTab === k ? "on" : ""}" aria-selected="${dTab === k}" data-dtab="${k}">${l}</button>`).join("")}</div>
+    ${body}`;
+  if (dTab === "overview"){
+    const ch = d.chart, n = ch.c.length, p = d.price;
+    drawChart($("#cMain"), {n, candles: ch, band: [ch.bbu, ch.bbl],
+      series: [{v: ch.sma20, color: "--c-sma20", w: 1}, {v: ch.sma50, color: "--c-sma50", w: 1.5}, {v: ch.sma200, color: "--c-sma200", w: 1.5}],
+      lastLine: p, dates: ch.dates, cone: {slots: Math.round(n * 0.22), p0: p, lo: p * (1 + f.lo), hi: p * (1 + f.hi), mid: p * (1 + f.exp), label: sp(f.exp) + " in " + hLabel(horizon)}});
+    drawChart($("#cVol"), {n, bars: ch.v.map((v, i) => ({v, color: ch.c[i] >= ch.o[i] ? "--up" : "--down"})), barAlpha: 0.45, zeroBase: true, noAxis: true, pad: [4, 56, 2, 4], extra: Math.round(n * 0.22)});
+    if (chartTab === "signal") drawChart($("#cInd"), {n, bars: ch.score.map(v => ({v, color: v >= 0 ? "--up" : "--down"})), barAlpha: 0.75, hlines: [[0, "--chart-text"]]});
+    if (chartTab === "rsi") drawChart($("#cInd"), {n, series: [{v: ch.rsi, color: "--c-sma50", w: 1.5}], hlines: [[70, "--down"], [30, "--up"], [50, "--chart-grid"]], yMin: 0, yMax: 100});
+    if (chartTab === "macd") drawChart($("#cInd"), {n, series: [{v: ch.macd, color: "--c-sma20", w: 1.5}, {v: ch.msig, color: "--c-sma50", w: 1.2}],
+      bars: ch.mhist.map(v => ({v, color: v >= 0 ? "--up" : "--down"})), barAlpha: 0.55, hlines: [[0, "--chart-text"]]});
+    if (chartTab === "stoch") drawChart($("#cInd"), {n, series: [{v: ch.stk, color: "--c-sma20", w: 1.5}, {v: ch.std, color: "--c-sma50", w: 1.2}], hlines: [[80, "--down"], [20, "--up"]], yMin: 0, yMax: 100});
+  }
+}
+
+// ---------------------------------------------------------------------
+// Bedienung
+// ---------------------------------------------------------------------
+function openSym(s){ if (!ready(s)) return; selected = s; save("selected", s); render(); window.scrollTo({top: 0}); }
+function closeDetail(){ selected = null; save("selected", null); render(); }
+function removeSym(s){
+  symbols = symbols.filter(x => x !== s); save("symbols", symbols);
+  if (selected === s){ selected = null; save("selected", null); }
+  render();
+}
 $("#grid").addEventListener("click", e => {
   const rm = e.target.closest("[data-rm]");
-  if (rm){ e.stopPropagation(); symbols = symbols.filter(x=>x!==rm.dataset.rm); save("symbols",symbols);
-    if (selected===rm.dataset.rm){ selected=null; save("selected",null);} render(); return; }
-  const c = e.target.closest(".card"); if (!c) return;
-  selected = selected === c.dataset.s ? null : c.dataset.s; save("selected", selected); render();
-  if (selected) $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
+  if (rm){ e.stopPropagation(); removeSym(rm.dataset.rm); return; }
+  const c = e.target.closest(".card"); if (c) openSym(c.dataset.s);
+});
+$("#summary").addEventListener("click", e => { const t = e.target.closest("[data-open]"); if (t) openSym(t.dataset.open); });
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && selected){ closeDetail(); return; }
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".card[data-s], .tile[data-open]")){
+    e.preventDefault(); openSym(e.target.dataset.s || e.target.dataset.open);
+  }
+});
+$("#detail").addEventListener("click", e => {
+  if (e.target.closest("#backBtn")) return closeDetail();
+  if (e.target.closest("#rmDetail")) return removeSym(selected);
+  const dt = e.target.closest("[data-dtab]"); if (dt){ dTab = dt.dataset.dtab; save("dtab", dTab); renderDetail(); return; }
+  const ct = e.target.closest("[data-ctab]"); if (ct){ chartTab = ct.dataset.ctab; save("tab", chartTab); renderDetail(); }
 });
 $("#addForm").addEventListener("submit", e => {
   e.preventDefault();
   const v = $("#symIn").value.split(/[ ,;]+/).map(normSym).filter(Boolean);
   for (const s of v) if (!symbols.includes(s)){ symbols.push(s); delete store[s]; delete data[s]; }
-  save("symbols", symbols); $("#symIn").value = ""; render(); tick();
+  save("symbols", symbols); $("#symIn").value = "";
+  if (selected){ selected = null; save("selected", null); }
+  render(); tick();
 });
 $("#resetBtn").onclick = () => { symbols = DEFAULT.slice(); save("symbols", symbols); render(); tick(); };
 $("#nowBtn").onclick = () => { countdown = mode === "demo" ? 10 : everySec; tick(selected); };
@@ -453,112 +802,34 @@ $("#sortSel").value = sortBy;
 $("#sortSel").onchange = e => { sortBy = e.target.value; save("sort", sortBy); render(); };
 $("#everySel").value = String(everySec);
 $("#everySel").onchange = e => { everySec = +e.target.value; save("every", everySec); countdown = Math.min(countdown, everySec); updateNote(); };
+function setHorizon(h, fromRange){
+  horizon = Math.max(5, Math.min(252, Math.round(h))); save("horizon", horizon);
+  if (!fromRange) $("#hzRange").value = horizon;
+  $("#hzVal").textContent = hLabel(horizon);
+  document.querySelectorAll("#hzChips .chip").forEach(b => b.classList.toggle("on", +b.dataset.h === horizon));
+  render();
+}
+$("#hzChips").innerHTML = HORIZONS.map(([l, h]) => `<button type="button" class="chip" data-h="${h}" title="${hLabel(h)}">${l}</button>`).join("");
+$("#hzChips").addEventListener("click", e => { const b = e.target.closest(".chip"); if (b) setHorizon(+b.dataset.h); });
+let hzRaf = 0;
+$("#hzRange").addEventListener("input", e => { const v = +e.target.value; cancelAnimationFrame(hzRaf); hzRaf = requestAnimationFrame(() => setHorizon(v, true)); });
+$("#hzRange").value = horizon; $("#hzVal").textContent = hLabel(horizon);
+document.querySelectorAll("#hzChips .chip").forEach(b => b.classList.toggle("on", +b.dataset.h === horizon));
+// Farbschema wechselt -> Diagramme neu zeichnen
+try{ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => render()); }catch(e){}
+new MutationObserver(() => render()).observe(document.documentElement, {attributes: true, attributeFilter: ["data-theme"]});
+window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(render, 150); });
 
-// ---------------------------------------------------------------------
-// Start: Connector anfragen, sonst Simulation
-// ---------------------------------------------------------------------
 function startDemo(reason){
   mode = "demo"; DEMO = true; data = {}; lastPrice = {};
-  $("#demoTag").innerHTML = '<span class="demo">SIMULIERTE KURSE</span>';
-  $("#note").innerHTML = "<b>Hinweis:</b> " + esc(reason) + " Die Kurse sind <b>keine echten Werte</b>; Indikatoren und Tipps werden aber genauso berechnet.";
+  $("#srcTag").textContent = "Simulierte Kurse"; $("#srcTag").className = "src sim";
+  $("#note").innerHTML = "<b>Hinweis:</b> " + esc(reason) + " Die Kurse sind <b>keine echten Werte</b>. Indikatoren, Tipps und Prognosen werden aber genauso berechnet.";
   $("#banner").hidden = true; $("#everySel").hidden = true;
   countdown = 10; demoTick();
 }
 function demoTick(){
-  for (const s of symbols){ try{ data[s] = analyze(demoRaw(s)); }catch(e){ data[s] = {symbol: s, error: e.message}; } }
+  for (const s of symbols){ try{ data[s] = analyze(demoRaw(s)); data[s].crypto = isCrypto(s); }catch(e){ data[s] = {symbol: s, error: e.message}; } }
   render();
-}
-
-function renderDetail(){
-  const el = $("#detail");
-  const d = selected && data[selected];
-  if (!d || d.error){ el.style.display = "none"; return; }
-  el.style.display = "block";
-  const cls = d.change >= 0 ? "up" : "down";
-  const groups = Object.entries(d.groups);
-  const t = d.tip, R = d.reliability;
-  const tipColor = d.total.dir > 0 ? "var(--up)" : "var(--down)";
-  const bygroup = {};
-  d.signals.forEach(s => (bygroup[s.group] = bygroup[s.group] || []).push(s));
-  const time = d.marketTime ? new Date(d.marketTime*1000).toLocaleString("de-DE") : "";
-  const pct = v => v == null ? "–" : nf(100 * v, 0) + " %";
-  const ret = v => v == null ? "–" : (v >= 0 ? "+" : "") + nf(100 * v, 1) + " %";
-  el.innerHTML = `
-  <div class="dhead">
-    <div><h2>${esc(d.name)} <span class="sub">${esc(d.symbol)}${d.exchange ? " · " + esc(d.exchange) : ""}</span></h2>
-    <div class="sub">Letzter Kurs: ${esc(time)}</div></div>
-    <div style="text-align:right"><div style="font-size:28px;font-weight:800">${nf(d.price)} ${esc(d.currency)}</div>
-    <div class="${cls}">${d.change>=0?"+":""}${nf(d.change)} (${d.change>=0?"+":""}${nf(d.changePct)} %)</div></div>
-  </div>
-  <div class="sumrow">
-    <div class="panel"><h3>Gesamt</h3><span class="badge ${badgeCls(d.total.label)}" style="font-size:14px">${esc(d.total.label)}</span>
-      <div class="meter"><i style="left:${meterPos(d.total.dir * d.total.strength / 100 * 0.6)}%"></i></div>
-      <div class="cnt"><span>Stärke ${d.total.strength} %</span><span>${esc(R.label)}</span></div></div>
-    ${groups.map(([g,s])=>`<div class="panel"><h3>${esc(g)}</h3><span class="badge ${badgeCls(s.label)}">${esc(s.label)}</span>
-      <div class="meter"><i style="left:${meterPos(s.score)}%"></i></div>
-      <div class="cnt"><span class="up">▲${s.buy}</span><span class="neu">○${s.neutral}</span><span class="down">▼${s.sell}</span></div></div>`).join("")}
-  </div>
-  <div class="dgrid">
-    <div>
-      <div class="panel">
-        <h3>Kursverlauf (Tageskerzen)</h3>
-        <div class="legend"><span><b style="background:#58a6ff"></b>SMA 20</span><span><b style="background:var(--sma50)"></b>SMA 50</span>
-        <span><b style="background:var(--sma200)"></b>SMA 200</span><span><b style="background:rgba(88,166,255,.35)"></b>Bollinger (20,2)</span></div>
-        <canvas class="chart" id="cMain" style="height:340px"></canvas>
-        <canvas class="chart" id="cVol" style="height:60px"></canvas>
-      </div>
-      <div class="panel" style="margin-top:12px">
-        <div class="tabs">${["signal","rsi","macd","stoch"].map(k=>`<button data-tab="${k}" class="${chartTab===k?"on":""}">${{signal:"Gesamtsignal",rsi:"RSI (14)",macd:"MACD (12,26,9)",stoch:"Stochastik"}[k]}</button>`).join("")}</div>
-        <canvas class="chart" id="cInd" style="height:150px"></canvas>
-        ${chartTab === "signal" ? '<div class="sub" style="font-size:11px">Über 0 = Kaufsignal, unter 0 = Verkaufssignal (gleiche Berechnung wie heute, Tag für Tag).</div>' : ""}
-      </div>
-    </div>
-    <div>
-      <div class="panel tip" style="border-left-color:${tipColor}">
-        <h3>Tipp</h3>
-        <div class="hl" style="color:${tipColor}">${esc(t.headline)}</div>
-        <div class="evid">${esc(t.evidence)}</div>
-        ${t.reasons.length?`<div class="sub">Dafür spricht:</div><ul>${t.reasons.map(r=>`<li>${esc(r)}</li>`).join("")}</ul>`:""}
-        ${t.contra.length?`<div class="sub">Dagegen spricht:</div><ul class="contra">${t.contra.map(r=>`<li>${esc(r)}</li>`).join("")}</ul>`:""}
-        ${t.plan?`<div>${esc(t.plan)}</div>`:""}
-        ${t.warnings.map(w=>`<div class="warn">⚠ ${esc(w)}</div>`).join("")}
-        <div class="sub" style="margin-top:8px;font-size:11px">Keine Anlageberatung. Frühere Trefferquoten sind keine Garantie für die Zukunft.</div>
-      </div>
-      <div class="panel" style="margin-top:12px"><h3>Treffsicherheit (Rückblick, ${R.years ? nf(R.years, 1) + " Jahre" : "–"})</h3><div class="kv">
-        <span>Kaufsignale</span><span>${R.buyN} × · danach gestiegen: <b>${pct(R.buyHit)}</b> · Ø ${ret(R.buyAvg)}</span>
-        <span>Verkaufssignale</span><span>${R.sellN} × · danach gefallen: <b>${pct(R.sellHit)}</b> · Ø ${ret(R.sellAvg)}</span>
-        <span>Zum Vergleich</span><span>gestiegen in ${pct(R.upShare)} aller ${HORIZON}-Tage-Zeiträume</span>
-        <span>Heutiges Signal</span><span>Verlässlichkeit <b>${esc(R.label)}</b>${R.hitRate != null ? ` (${pct(R.hitRate)} bei ${R.n} ${R.similar ? "ähnlichen" : ""} Fällen)` : ""}</span>
-      </div><div class="sub" style="font-size:11px;margin-top:6px">Jeder Tag wurde nur mit den Daten bewertet, die an diesem Tag bekannt waren. Gemessen wird die Kursrichtung ${HORIZON} Handelstage später.</div></div>
-      <div class="panel" style="margin-top:12px"><h3>Kennzahlen</h3><div class="kv">
-        <span>Tageshoch / -tief</span><span>${nf(d.dayHigh)} / ${nf(d.dayLow)}</span>
-        <span>52 Wochen Hoch / Tief</span><span>${nf(d.high52)} / ${nf(d.low52)}</span>
-        <span>Abstand 52W-Hoch</span><span>${nf((d.price/d.high52-1)*100)} %</span>
-        <span>Volumen heute</span><span>${d.volume ? nf(d.volume,0) : "–"}</span>
-      </div></div>
-      <div class="panel" style="margin-top:12px"><h3>Pivot-Punkte (klassisch)</h3><div class="kv">
-        ${Object.entries(d.pivots).map(([k,v])=>`<span>${k}</span><span class="${k[0]==="R"?"down":k[0]==="S"?"up":""}">${nf(v)}${Math.abs(v-d.price)/d.price<0.01?" ← nahe Kurs":""}</span>`).join("")}
-      </div></div>
-    </div>
-  </div>
-  <div class="panel" style="margin-top:12px"><h3>Alle Indikatoren (${d.signals.length})</h3><div class="tablewrap">
-    <table><thead><tr><th>Indikator</th><th>Wert</th><th>Signal</th><th title="Wie oft dieser Indikator bei diesem Wert die Richtung der nächsten ${HORIZON} Handelstage richtig angezeigt hat">Treffer*</th><th>Bedeutung</th></tr></thead><tbody>
-    ${Object.entries(bygroup).map(([g,arr])=>`<tr class="grp"><td colspan="5">${esc(g)}</td></tr>` +
-      arr.map(s=>`<tr><td>${esc(s.name)}</td><td class="v">${esc(s.value)}</td><td>${sigTxt(s)}</td><td class="v ${s.hit == null ? "" : s.hit >= 55 ? "up" : s.hit < 48 ? "down" : ""}">${s.hit == null ? "–" : s.hit + " %"}</td><td>${esc(s.note)}</td></tr>`).join("")).join("")}
-    </tbody></table></div>
-    <div class="sub" style="font-size:11px;margin-top:6px">* Trefferquote dieses Indikators bei diesem Wert (Richtung nach ${HORIZON} Handelstagen). Indikatoren mit hoher Quote zählen in der Gesamtbewertung stärker, schwache weniger.
-    Im Trendmarkt (ADX über 25) zählen Trend-Indikatoren mehr, im Seitwärtsmarkt die Überkauft/Überverkauft-Signale.</div></div>`;
-  el.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { chartTab = b.dataset.tab; save("tab", chartTab); renderDetail(); });
-  const ch = d.chart, n = ch.c.length;
-  drawChart($("#cMain"), {n, candles: ch, band:[ch.bbu, ch.bbl],
-    series:[{v:ch.sma20,color:"#58a6ff",w:1},{v:ch.sma50,color:"#f0883e",w:1.5},{v:ch.sma200,color:"#bc8cff",w:1.5}],
-    lastLine: d.price, dates: ch.dates});
-  drawChart($("#cVol"), {n, bars: ch.v.map((v,i)=>({v, color: ch.c[i]>=ch.o[i]?"rgba(46,204,113,.5)":"rgba(255,92,92,.5)"})), zeroBase:true, noAxis:true, pad:[4,58,2,2]});
-  if (chartTab === "signal") drawChart($("#cInd"), {n, bars: ch.score.map(v=>({v, color: v==null ? "transparent" : v>=0?"rgba(46,204,113,.7)":"rgba(255,92,92,.7)"})), hlines:[[0,"rgba(139,152,168,.5)"]]});
-  if (chartTab === "rsi") drawChart($("#cInd"), {n, series:[{v:ch.rsi,color:"#e3b341",w:1.5}], hlines:[[70,"rgba(255,92,92,.6)"],[30,"rgba(46,204,113,.6)"],[50,"rgba(139,152,168,.3)"]], yMin:0, yMax:100});
-  if (chartTab === "macd") drawChart($("#cInd"), {n, series:[{v:ch.macd,color:"#58a6ff",w:1.5},{v:ch.msig,color:"#f0883e",w:1.2}],
-    bars: ch.mhist.map(v=>({v, color: v>=0?"rgba(46,204,113,.6)":"rgba(255,92,92,.6)"})), hlines:[[0,"rgba(139,152,168,.4)"]]});
-  if (chartTab === "stoch") drawChart($("#cInd"), {n, series:[{v:ch.stk,color:"#58a6ff",w:1.5},{v:ch.std,color:"#f0883e",w:1.2}], hlines:[[80,"rgba(255,92,92,.6)"],[20,"rgba(46,204,113,.6)"]], yMin:0, yMax:100});
 }
 
 // ---------------------------------------------------------------------
@@ -1159,7 +1430,7 @@ function analyze(raw){
     symbol: raw.symbol, name: raw.name, currency: raw.currency, exchange: raw.exchange, marketTime: raw.marketTime,
     price, change, changePct: 100 * change / prev, dayHigh: h[I], dayLow: l[I],
     high52: Math.max(...year.map(x => x.h)), low52: Math.min(...year.map(x => x.l)), volume: v[I],
-    signals: sig, groups, total: tot2, tip, pivots, reliability,
+    signals: sig, groups, total: tot2, tip, pivots, reliability, crypto, F: {c, score, sd: hv, start},
     chart: {
       dates: cs.slice(n - k).map(x => new Date(x.t * 1000).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "UTC"})),
       o: tail(o), h: tail(h), l: tail(l), c: tail(c), sma20: tail(mid), sma50: tail(s50), sma200: tail(s200),
@@ -1213,62 +1484,97 @@ function buildTip(x){
   return {headline: head, reasons: pro.map(line), contra: con.map(line), evidence, plan, warnings};
 }
 
-// Einfacher Canvas-Chart ohne externe Bibliotheken
+// Canvas-Diagramm ohne externe Bibliotheken; Farben kommen aus den CSS-Variablen (hell/dunkel)
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#888"; }
+const colorOf = c => c && c.startsWith("--") ? cssVar(c) : c;
 function drawChart(cv, o){
   const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
   if (!W || !H) return;
-  cv.width = W*dpr; cv.height = H*dpr;
-  const x = cv.getContext("2d"); x.scale(dpr, dpr); x.clearRect(0,0,W,H);
-  const [pt, pr, pb, pl] = o.pad || [8, 58, o.dates ? 18 : 6, 4];
-  let vals = [];
-  (o.series||[]).forEach(s => s.v.forEach(v => v!=null && vals.push(v)));
-  if (o.candles){ o.candles.h.forEach(v=>vals.push(v)); o.candles.l.forEach(v=>vals.push(v)); }
-  if (o.band) o.band.forEach(b => b.forEach(v => v!=null && vals.push(v)));
-  if (o.bars) o.bars.forEach(b => b.v!=null && vals.push(b.v));
-  (o.hlines||[]).forEach(h => vals.push(h[0]));
+  cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+  const x = cv.getContext("2d"); x.setTransform(dpr, 0, 0, dpr, 0, 0); x.clearRect(0, 0, W, H);
+  const grid = cssVar("--chart-grid"), txt = cssVar("--chart-text"), up = cssVar("--up"), down = cssVar("--down"), acc = cssVar("--accent");
+  const [pt, pr, pb, pl] = o.pad || [8, 56, o.dates ? 20 : 6, 4];
+  const vals = [];
+  (o.series || []).forEach(s => s.v.forEach(v => v != null && vals.push(v)));
+  if (o.candles){ o.candles.h.forEach(v => vals.push(v)); o.candles.l.forEach(v => vals.push(v)); }
+  if (o.band) o.band.forEach(b => b.forEach(v => v != null && vals.push(v)));
+  if (o.bars) o.bars.forEach(b => b.v != null && vals.push(b.v));
+  if (o.cone) vals.push(o.cone.lo, o.cone.hi, o.cone.p0);
+  (o.hlines || []).forEach(h => vals.push(h[0]));
   if (o.zeroBase) vals.push(0);
   if (!vals.length) return;
   let lo = o.yMin != null ? o.yMin : Math.min(...vals), hi = o.yMax != null ? o.yMax : Math.max(...vals);
   if (hi === lo){ hi += 1; lo -= 1; }
-  if (o.yMin == null && !o.zeroBase){ const m = (hi-lo)*0.05; hi += m; lo -= m; }
-  const n = o.n, cw = (W-pl-pr)/n;
-  const X = i => pl + cw*(i+0.5), Y = v => pt + (hi - v)/(hi - lo)*(H-pt-pb);
+  if (o.yMin == null && !o.zeroBase){ const m = (hi - lo) * 0.06; hi += m; lo -= m; }
+  const slots = o.n + (o.cone ? o.cone.slots : 0) + (o.extra || 0), cw = (W - pl - pr) / slots;
+  const X = i => pl + cw * (i + 0.5), Y = v => pt + (hi - v) / (hi - lo) * (H - pt - pb);
+  x.lineWidth = 1; x.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
   if (!o.noAxis){
-    x.strokeStyle = "rgba(139,152,168,.12)"; x.fillStyle = "#8b98a8"; x.font = "11px system-ui"; x.lineWidth = 1;
-    for (let k=0;k<=4;k++){ const v = lo + (hi-lo)*k/4, y = Y(v);
-      x.beginPath(); x.moveTo(pl,y); x.lineTo(W-pr,y); x.stroke();
-      x.fillText(nf(v, Math.abs(hi) < 10 ? 2 : Math.abs(hi) < 1000 ? 1 : 0), W-pr+4, y+4); }
-    if (o.dates){ const step = Math.ceil(n/6);
-      for (let i=0;i<n;i+=step) x.fillText(o.dates[i], Math.max(pl, X(i)-20), H-4); }
+    x.strokeStyle = grid; x.fillStyle = txt;
+    for (let k = 0; k <= 4; k++){
+      const v = lo + (hi - lo) * k / 4, y = Y(v);
+      x.beginPath(); x.moveTo(pl, y); x.lineTo(W - pr, y); x.stroke();
+      x.fillText(nf(v, Math.abs(hi) < 10 ? 2 : Math.abs(hi) < 1000 ? 1 : 0), W - pr + 6, y + 4);
+    }
+    if (o.dates){ const step = Math.ceil(o.n / 5); for (let i = 0; i < o.n; i += step) x.fillText(o.dates[i], Math.min(Math.max(pl, X(i) - 24), W - pr - 56), H - 5); }
   }
-  (o.hlines||[]).forEach(([v,c]) => { x.strokeStyle=c; x.setLineDash([4,4]); x.beginPath(); x.moveTo(pl,Y(v)); x.lineTo(W-pr,Y(v)); x.stroke(); x.setLineDash([]); });
-  if (o.band){ const [u,l] = o.band; x.fillStyle = "rgba(88,166,255,.08)"; x.strokeStyle = "rgba(88,166,255,.35)"; x.beginPath();
-    let started=false; for (let i=0;i<n;i++) if (u[i]!=null){ started ? x.lineTo(X(i),Y(u[i])) : x.moveTo(X(i),Y(u[i])); started=true; }
-    for (let i=n-1;i>=0;i--) if (l[i]!=null) x.lineTo(X(i),Y(l[i]));
-    x.closePath(); x.fill(); }
-  if (o.bars){ const z = Y(Math.max(lo, 0));
-    o.bars.forEach((b,i) => { if (b.v==null) return; x.fillStyle = b.color; const y = Y(b.v); x.fillRect(X(i)-cw*0.4, Math.min(y,z), Math.max(cw*0.8,1), Math.abs(z-y)||1); }); }
-  if (o.candles){ const c = o.candles;
-    for (let i=0;i<n;i++){ const up = c.c[i] >= c.o[i]; x.strokeStyle = x.fillStyle = up ? "#2ecc71" : "#ff5c5c";
-      x.beginPath(); x.moveTo(X(i),Y(c.h[i])); x.lineTo(X(i),Y(c.l[i])); x.stroke();
-      const y1 = Y(Math.max(c.o[i],c.c[i])), y2 = Y(Math.min(c.o[i],c.c[i]));
-      x.fillRect(X(i)-Math.max(cw*0.35,0.5), y1, Math.max(cw*0.7,1), Math.max(y2-y1,1)); } }
-  (o.series||[]).forEach(s => {
-    x.strokeStyle = s.color; x.lineWidth = s.w || 1; x.beginPath(); let st=false, first=null, lastI=null;
-    s.v.forEach((v,i) => { if (v==null) return; if (!st){ x.moveTo(X(i),Y(v)); st=true; first=i; } else x.lineTo(X(i),Y(v)); lastI=i; });
+  (o.hlines || []).forEach(([v, c]) => { x.strokeStyle = colorOf(c); x.setLineDash([4, 4]); x.beginPath(); x.moveTo(pl, Y(v)); x.lineTo(W - pr, Y(v)); x.stroke(); x.setLineDash([]); });
+  if (o.band){
+    const [u, l] = o.band; x.fillStyle = cssVar("--c-band"); x.strokeStyle = cssVar("--c-band-line"); x.beginPath();
+    let st = false; for (let i = 0; i < o.n; i++) if (u[i] != null){ st ? x.lineTo(X(i), Y(u[i])) : x.moveTo(X(i), Y(u[i])); st = true; }
+    for (let i = o.n - 1; i >= 0; i--) if (l[i] != null) x.lineTo(X(i), Y(l[i]));
+    x.closePath(); x.fill();
+  }
+  if (o.bars){
+    const z = Y(Math.max(lo, Math.min(hi, 0)));
+    x.globalAlpha = o.barAlpha || 0.6;
+    o.bars.forEach((b, i) => { if (b.v == null) return; x.fillStyle = colorOf(b.color); const y = Y(b.v); x.fillRect(X(i) - cw * 0.4, Math.min(y, z), Math.max(cw * 0.8, 1), Math.abs(z - y) || 1); });
+    x.globalAlpha = 1;
+  }
+  if (o.candles){
+    const c = o.candles;
+    for (let i = 0; i < o.n; i++){
+      const u = c.c[i] >= c.o[i]; x.strokeStyle = x.fillStyle = u ? up : down;
+      x.beginPath(); x.moveTo(X(i), Y(c.h[i])); x.lineTo(X(i), Y(c.l[i])); x.stroke();
+      const y1 = Y(Math.max(c.o[i], c.c[i])), y2 = Y(Math.min(c.o[i], c.c[i]));
+      x.fillRect(X(i) - Math.max(cw * 0.35, 0.5), y1, Math.max(cw * 0.7, 1), Math.max(y2 - y1, 1));
+    }
+  }
+  (o.series || []).forEach(s => {
+    const col = colorOf(s.color); x.strokeStyle = col; x.lineWidth = s.w || 1; x.beginPath();
+    let st = false, first = null, lastI = null;
+    s.v.forEach((v, i) => { if (v == null) return; if (!st){ x.moveTo(X(i), Y(v)); st = true; first = i; } else x.lineTo(X(i), Y(v)); lastI = i; });
     x.stroke();
-    if (s.fill && st){ x.lineTo(X(lastI), H); x.lineTo(X(first), H); x.closePath(); x.globalAlpha=.12; x.fillStyle=s.color; x.fill(); x.globalAlpha=1; }
+    if (s.fill && st){ x.lineTo(X(lastI), H); x.lineTo(X(first), H); x.closePath(); x.globalAlpha = 0.12; x.fillStyle = col; x.fill(); x.globalAlpha = 1; }
+    x.lineWidth = 1;
   });
-  if (o.lastLine != null){ const y = Y(o.lastLine); x.strokeStyle="rgba(230,237,243,.5)"; x.setLineDash([2,3]); x.beginPath(); x.moveTo(pl,y); x.lineTo(W-pr,y); x.stroke(); x.setLineDash([]);
-    x.fillStyle = "#58a6ff"; x.fillRect(W-pr+1, y-8, pr-2, 16); x.fillStyle="#04111f"; x.font="bold 11px system-ui"; x.fillText(nf(o.lastLine), W-pr+4, y+4); }
+  if (o.cone){
+    const k = o.cone, i0 = o.n - 1, i1 = o.n - 1 + k.slots;
+    x.strokeStyle = grid; x.setLineDash([3, 3]); x.beginPath(); x.moveTo(X(i0), pt); x.lineTo(X(i0), H - pb); x.stroke(); x.setLineDash([]);
+    x.fillStyle = acc; x.globalAlpha = 0.14; x.beginPath(); x.moveTo(X(i0), Y(k.p0)); x.lineTo(X(i1), Y(k.hi)); x.lineTo(X(i1), Y(k.lo)); x.closePath(); x.fill();
+    x.globalAlpha = 0.5; x.strokeStyle = acc; x.beginPath(); x.moveTo(X(i0), Y(k.p0)); x.lineTo(X(i1), Y(k.hi)); x.moveTo(X(i0), Y(k.p0)); x.lineTo(X(i1), Y(k.lo)); x.stroke();
+    x.globalAlpha = 1; x.lineWidth = 2; x.setLineDash([5, 3]); x.beginPath(); x.moveTo(X(i0), Y(k.p0)); x.lineTo(X(i1), Y(k.mid)); x.stroke(); x.setLineDash([]); x.lineWidth = 1;
+    x.fillStyle = acc; x.beginPath(); x.arc(X(i1), Y(k.mid), 2.5, 0, 2 * Math.PI); x.fill();
+    if (k.label){
+      x.font = "600 12px 'IBM Plex Mono', ui-monospace, monospace";
+      const tw = x.measureText(k.label).width, ly = Math.max(pt + 12, Math.min(H - pb - 4, Y(k.mid) - 8));
+      x.fillText(k.label, Math.max(pl, X(i1) - tw), ly);
+      x.font = "11px 'IBM Plex Mono', ui-monospace, monospace";
+    }
+  }
+  if (o.lastLine != null){
+    const y = Y(o.lastLine);
+    x.strokeStyle = txt; x.setLineDash([2, 3]); x.beginPath(); x.moveTo(pl, y); x.lineTo(W - pr, y); x.stroke(); x.setLineDash([]);
+    x.fillStyle = acc; x.fillRect(W - pr + 2, y - 9, pr - 4, 18);
+    x.fillStyle = cssVar("--on-accent"); x.font = "600 11px 'IBM Plex Mono', ui-monospace, monospace"; x.fillText(nf(o.lastLine), W - pr + 5, y + 4);
+  }
 }
-window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(render, 150); });
 
 (async () => {
   try{ mcp = window.claude && window.claude.use ? await window.claude.use("mcp") : null; }catch(e){ mcp = null; }
   if (!mcp){ startDemo("Twelve Data ist in dieser Ansicht nicht verfügbar, deshalb werden simulierte Kurse angezeigt."); return; }
   mode = "live";
-  $("#demoTag").innerHTML = '<span class="live">LIVE · TWELVE DATA</span>';
+  $("#srcTag").textContent = "Live · Twelve Data"; $("#srcTag").className = "src live";
   render(); countdown = everySec; tick();
 })();
 </script>
