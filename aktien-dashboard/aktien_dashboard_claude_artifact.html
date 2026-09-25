@@ -466,9 +466,7 @@ async function tick(force){
     }
     await Promise.all(jobs);
     // 1b) Stundenkerzen für Stunden-Prognosen (höchstens eine Abfrage pro Takt)
-    if (symbols.every(s => store[s] && (store[s].candles || store[s].error)) && budgetOK()){
-      const si = nextIntra(); if (si) await guardedIntra(si);
-    }
+    if (budgetOK()){ const si = nextIntra(); if (si) await guardedIntra(si); }
     // 2) ein Live-Kurs reihum (oder der ausgewählte Wert bei "Jetzt aktualisieren")
     const ready = symbols.every(s => store[s] && (store[s].candles || store[s].error));
     if (ready && budgetOK() && usedToday() < DAY_LIMIT - DAY_RESERVE){
@@ -503,7 +501,14 @@ function fcFor(sym, h = hz){
   const a = intra[sym] && intra[sym].analysis;
   return a ? forecastBars(a, h.n) : null;
 }
-function intraMsg(sym){ const it = intra[sym]; return it && it.error ? "Stundenkerzen nicht verfügbar: " + it.error : "lädt Stundenkerzen …"; }
+function intraMsg(sym){
+  const it = intra[sym];
+  if (it && it.error) return "Stundenkerzen nicht verfügbar: " + it.error;
+  if (it && it.lastErr) return `Stundenkerzen: Abruf fehlgeschlagen (${it.lastErr}), neuer Versuch ${it.retryAt ? "um " + hhmm(it.retryAt) : "gleich"}`;
+  if (it && it.loading) return "lädt Stundenkerzen …";
+  if (!store[sym] || !store[sym].candles) return "wartet auf Tageskurse …";
+  return "Stundenkerzen stehen in der Warteschlange (Limit 8 Abfragen/Minute) …";
+}
 
 // ---------------------------------------------------------------------
 // Stundenkerzen für Prognosen bis hinunter zu 1 Stunde
@@ -521,12 +526,12 @@ function recomputeIntra(sym){
 }
 async function loadIntraday(sym){
   const it = intra[sym] = intra[sym] || {};
-  const text = await td("get_time_series", {...tdArgs(sym), interval: "1h", outputsize: 1000});
+  const text = await td("get_time_series", {...tdArgs(sym), interval: "1h", outputsize: it.fails ? 250 : 500});
   const candles = parseCSV(text).reverse()
     .map(r => ({t: dtTs(r.datetime), o: +r.open, h: +r.high, l: +r.low, c: +r.close, v: +(r.volume || 0)}))
     .filter(c => [c.t, c.o, c.h, c.l, c.c].every(isFinite));
   if (candles.length < 60) throw apiError("Zu wenig Stundenkerzen");
-  it.candles = candles; it.fetchedAt = Date.now(); it.error = null;
+  it.candles = candles; it.fetchedAt = Date.now(); it.error = null; it.lastErr = null; it.fails = 0; it.retryAt = 0;
   save("h1_" + sym, {fetchedAt: it.fetchedAt, candles});
   recomputeIntra(sym);
 }
@@ -536,7 +541,11 @@ async function guardedIntra(s){
   try{ await loadIntraday(s); transient = ""; }
   catch(e){
     if (e && e.code === "api"){ if (e.kind !== "minute" && e.kind !== "day") it.error = e.kind === "plan" ? planMsg(s) : e.message; }
-    else handleError(s, e);
+    else {
+      it.fails = (it.fails || 0) + 1; it.retryAt = Date.now() + Math.min(10, it.fails * 2) * 60000;
+      it.lastErr = (e && (e.message || e.code)) || "unbekannter Fehler";
+      if (e && (FATAL[e.code] || NO_MCP[e.code])) handleError(s, e);
+    }
   }finally{ it.loading = false; }
 }
 function nextIntra(){
@@ -545,7 +554,7 @@ function nextIntra(){
   for (const s of order){
     if (!intraWanted(s) || !store[s] || !store[s].candles) continue;
     const it = intra[s] = intra[s] || {};
-    if (it.loading || it.error) continue;
+    if (it.loading || it.error || (it.retryAt && now < it.retryAt)) continue;
     if (!it.candles){
       const cached = load("h1_" + s, null);
       if (cached && now - cached.fetchedAt < INTRA_AGE){ it.candles = cached.candles; it.fetchedAt = cached.fetchedAt; recomputeIntra(s); continue; }
