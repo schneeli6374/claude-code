@@ -1,0 +1,852 @@
+<title>Aktien-Dashboard</title>
+<style>
+:root{color-scheme:dark;--bg:#0d1117;--panel:#161b22;--panel2:#1c2330;--line:#2a3340;--text:#e6edf3;--muted:#8b98a8;
+--up:#2ecc71;--down:#ff5c5c;--neutral:#e3b341;--accent:#58a6ff;--sma50:#f0883e;--sma200:#bc8cff}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:rgba(13,17,23,.95);backdrop-filter:blur(6px);border-bottom:1px solid var(--line);
+padding:12px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+h1{font-size:18px;margin:0 12px 0 0;white-space:nowrap}
+.demo{background:var(--neutral);color:#000;border-radius:4px;padding:2px 6px;font-size:11px;font-weight:700;margin-left:6px}
+input{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px 10px;font-size:14px;width:230px;max-width:100%}
+button{background:var(--accent);color:#04111f;border:0;border-radius:6px;padding:7px 12px;font-weight:600;cursor:pointer}
+button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+.status{margin-left:auto;color:var(--muted);font-size:12px;display:flex;gap:10px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--up);display:inline-block}
+.dot.paused{background:var(--neutral)} .dot.err{background:var(--down)}
+main{padding:16px;max-width:1500px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;cursor:pointer;position:relative;transition:border-color .15s}
+.card:hover,.card.sel{border-color:var(--accent)}
+.card .top{display:flex;justify-content:space-between;gap:8px}
+.card .sym{font-weight:700;font-size:15px}.card .nm{color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+.card .px{font-size:20px;font-weight:700;text-align:right;font-variant-numeric:tabular-nums}
+.chg{font-size:12px;text-align:right;font-variant-numeric:tabular-nums}
+.up{color:var(--up)}.down{color:var(--down)}.neu{color:var(--neutral)}
+.badge{display:inline-block;padding:3px 8px;border-radius:5px;font-weight:700;font-size:12px}
+.b-sb{background:#1f8b4c;color:#fff}.b-b{background:rgba(46,204,113,.18);color:var(--up)}
+.b-n{background:rgba(227,179,65,.15);color:var(--neutral)}.b-s{background:rgba(255,92,92,.18);color:var(--down)}.b-ss{background:#b83232;color:#fff}
+.meter{height:6px;border-radius:3px;background:linear-gradient(90deg,var(--down),var(--neutral),var(--up));position:relative;margin:8px 0 4px}
+.meter i{position:absolute;top:-4px;width:4px;height:14px;background:#fff;border-radius:2px;transform:translateX(-2px)}
+.rm{position:absolute;top:6px;right:8px;color:var(--muted);background:none;padding:0 4px;font-size:16px;display:none}
+.card:hover .rm{display:block}
+.card canvas{width:100%;height:44px;display:block;margin-top:6px}
+.cnt{font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
+.flash-up{animation:fu 1s}.flash-down{animation:fd 1s}
+@keyframes fu{from{background:rgba(46,204,113,.35)}}@keyframes fd{from{background:rgba(255,92,92,.35)}}
+#detail{margin-top:18px;display:none}
+.dhead{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;justify-content:space-between;margin-bottom:12px}
+.dhead h2{margin:0;font-size:22px}.dhead .sub{color:var(--muted);font-size:13px}
+.dgrid{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px}
+@media(max-width:1000px){.dgrid{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}
+.panel h3{margin:0 0 8px;font-size:13px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+.chart{width:100%;display:block}
+.legend{font-size:11px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px}
+.legend b{display:inline-block;width:10px;height:3px;vertical-align:middle;margin-right:4px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td,th{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--muted);font-weight:600;font-size:12px}
+td.v{font-variant-numeric:tabular-nums;white-space:nowrap}
+tr.grp td{background:var(--panel2);font-weight:700;color:var(--accent)}
+.sig{font-weight:700;white-space:nowrap}
+.tip{border-left:4px solid var(--accent);padding:10px 12px;background:var(--panel2);border-radius:6px}
+.tip .hl{font-size:16px;font-weight:700;margin-bottom:6px}
+.tip ul{margin:6px 0;padding-left:18px}
+.warn{color:var(--neutral);font-size:13px;margin-top:6px}
+.sumrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:8px;margin-bottom:12px}
+.sumrow .panel{padding:10px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13px}.kv span:nth-child(odd){color:var(--muted)}
+.tablewrap{overflow-x:auto}
+footer{color:var(--muted);font-size:12px;text-align:center;padding:24px 16px}
+.err{color:var(--down);font-size:13px}
+.startup{grid-column:1/-1;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px;line-height:1.6;max-width:760px}
+.note{background:rgba(227,179,65,.1);border:1px solid rgba(227,179,65,.45);border-radius:8px;padding:10px 12px;margin-bottom:12px;line-height:1.5;max-width:1100px}
+.banner{background:rgba(255,92,92,.12);border:1px solid var(--down);border-radius:8px;padding:10px 12px;margin-bottom:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;margin-bottom:6px}.tabs button{padding:4px 10px;font-size:12px}
+.tabs button:not(.on){background:transparent;color:var(--muted);border:1px solid var(--line)}
+</style>
+<div id="jsErr" class="banner" style="display:none;margin:12px 16px"></div>
+<script>
+  // Zeigt Fehler sichtbar an, statt dass die Seite nur leer bleibt (bewusst altes JavaScript).
+  window.addEventListener("error", function (e) {
+    var b = document.getElementById("jsErr");
+    if (!b) return;
+    b.style.display = "block";
+    b.textContent = "Fehler im Dashboard: " + (e.message || e) + ". Bitte einen aktuellen Browser verwenden (Chrome, Edge, Firefox oder Safari).";
+  });
+</script>
+<header>
+  <h1>Aktien-Dashboard<span id="demoTag"></span></h1>
+  <form id="addForm" style="display:flex;gap:6px;flex-wrap:wrap">
+    <input id="symIn" placeholder="Symbol, z. B. AAPL, SAP.DE, BTC-USD" autocomplete="off">
+    <button>Hinzufügen</button>
+    <button type="button" class="ghost" id="resetBtn" title="Standardliste wiederherstellen">Standard</button>
+  </form>
+  <select id="sortSel" style="background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:7px">
+    <option value="list">Sortierung: Liste</option>
+    <option value="score">Sortierung: Signal-Stärke</option>
+    <option value="chg">Sortierung: Tagesänderung</option>
+  </select>
+  <div class="status"><span class="dot" id="dot"></span><span id="stat">lade …</span>
+    <button class="ghost" id="nowBtn">Jetzt aktualisieren</button>
+    <button class="ghost" id="demoBtn" hidden>Demo-Modus</button></div>
+</header>
+<main>
+  <div class="note" id="note"><b>Hinweis:</b> In Claude darf diese Seite keine Börsendaten aus dem Internet laden.
+    Die Kurse sind deshalb <b>simuliert</b> und keine echten Werte. Indikatoren und Tipps werden aber genauso berechnet
+    wie mit echten Kursen. Echte Kurse gibt es mit der Datei im Browser am PC oder Mac, oder später hier über einen verbundenen Kursdaten-Connector.</div>
+  <div id="banner" class="banner" style="display:none">⚠ Live-Kurse konnten nicht geladen werden (keine Internetverbindung, oder Yahoo Finance bzw. die Proxys blockieren gerade).
+    <button id="bannerDemo">Demo-Daten anzeigen</button></div>
+  <div class="grid" id="grid"><div class="startup" id="startup"><b>Das Dashboard startet …</b></div></div>
+  <section id="detail"></section>
+</main>
+<footer>Simulierte Kurse zur Vorführung. Aktualisierung alle 10 Sekunden, solange die Seite sichtbar ist.<br>
+⚠️ Die Kauf-/Verkaufstipps werden automatisch aus technischen Indikatoren berechnet und sind <b>keine Anlageberatung</b>. Investieren auf eigenes Risiko.</footer>
+<script>
+let DEMO = true;   // In Claude darf die Seite keine Börsendaten aus dem Internet laden
+const INTERVAL = 10;
+const DEFAULT = ["NVDA","AAPL","BTC-USD","MSFT","AMZN","GOOGL","META","TSLA","SAP.DE","SIE.DE"];
+let symbols = load("symbols", DEFAULT);
+let selected = load("selected", null);
+let sortBy = load("sort", "list");
+let data = {}, lastPrice = {}, countdown = INTERVAL, busy = false, chartTab = load("tab", "rsi");
+
+function load(k, d){ try{ const v = localStorage.getItem("ad_"+k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
+function save(k, v){ try{ localStorage.setItem("ad_"+k, JSON.stringify(v)); }catch(e){} }
+const $ = s => document.querySelector(s);
+const nf = (x, d=2) => x==null||isNaN(x) ? "–" : x.toLocaleString("de-DE",{minimumFractionDigits:d, maximumFractionDigits:d});
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function badgeCls(l){ return {"Starker Kauf":"b-sb","Kaufen":"b-b","Halten / Neutral":"b-n","Verkaufen":"b-s","Starker Verkauf":"b-ss"}[l] || "b-n"; }
+function sigTxt(s){ return s>0 ? '<span class="sig up">▲ Kauf</span>' : s<0 ? '<span class="sig down">▼ Verkauf</span>' : '<span class="sig neu">● Neutral</span>'; }
+function updateDemo(){
+  $("#demoTag").innerHTML = '<span class="demo">SIMULIERTE KURSE</span>';
+  $("#demoBtn").textContent = DEMO ? "Live-Daten" : "Demo-Modus";
+}
+function setDemo(on){
+  DEMO = on; save("demo", on); data = {}; lastPrice = {};
+  $("#banner").style.display = "none"; updateDemo(); render(); refresh();
+}
+updateDemo();
+$("#sortSel").value = sortBy;
+
+async function refresh(){
+  if (busy || !symbols.length) return;
+  busy = true;
+  const mode = DEMO, list = symbols.slice();
+  $("#stat").textContent = "aktualisiere …";
+  let res;
+  try{ res = await loadAll(list); }catch(e){ res = list.map(s => ({symbol: s, error: e.message})); }
+  busy = false; countdown = INTERVAL;
+  if (mode !== DEMO) return refresh();   // Modus wurde während des Ladens umgeschaltet
+  res.forEach((d, i) => { data[list[i]] = d; });
+  const offline = !DEMO && res.length > 0 && res.every(d => d.error && d.network);
+  $("#banner").style.display = offline ? "flex" : "none";
+  $("#dot").className = offline ? "dot err" : "dot";
+  $("#stat").textContent = offline ? "keine Verbindung zu Yahoo Finance" : "Stand " + new Date().toLocaleTimeString("de-DE");
+  render();
+}
+
+setInterval(()=>{
+  if (document.hidden){ $("#dot").className="dot paused"; $("#stat").textContent="pausiert (Tab nicht sichtbar)"; return; }
+  countdown--;
+  const s = $("#stat"); if (!busy && s.textContent.startsWith("Stand")) s.textContent = s.textContent.split(" · ")[0] + " · nächste in " + Math.max(countdown,0) + " s";
+  if (countdown <= 0) refresh();
+}, 1000);
+document.addEventListener("visibilitychange", ()=>{ if(!document.hidden) refresh(); });
+
+function render(){
+  const g = $("#grid");
+  let list = symbols.slice();
+  const num = (s, f, d) => (data[s] && !data[s].error) ? f(data[s]) : d;
+  if (sortBy === "score") list.sort((a,b)=>num(b, x => x.total.score, -9) - num(a, x => x.total.score, -9));
+  if (sortBy === "chg") list.sort((a,b)=>num(b, x => x.changePct, -999) - num(a, x => x.changePct, -999));
+  g.innerHTML = list.map(s => {
+    const d = data[s];
+    if (!d) return `<div class="card" data-s="${esc(s)}"><div class="sym">${esc(s)}</div><div class="nm">lade …</div></div>`;
+    if (d.error) return `<div class="card" data-s="${esc(s)}"><button class="rm" data-rm="${esc(s)}">×</button><div class="sym">${esc(s)}</div><div class="err">⚠ ${esc(d.error)}</div></div>`;
+    const cls = d.change >= 0 ? "up" : "down";
+    const pos = ((d.total.score + 1) / 2 * 100).toFixed(1);
+    let flash = "";
+    if (lastPrice[s] != null && lastPrice[s] !== d.price) flash = d.price > lastPrice[s] ? "flash-up" : "flash-down";
+    lastPrice[s] = d.price;
+    return `<div class="card ${s===selected?"sel":""} ${flash}" data-s="${esc(s)}">
+      <button class="rm" data-rm="${esc(s)}" title="entfernen">×</button>
+      <div class="top"><div><div class="sym">${esc(d.symbol)}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div></div>
+      <div><div class="px">${nf(d.price)} <small style="font-size:11px;color:var(--muted)">${esc(d.currency)}</small></div>
+      <div class="chg ${cls}">${d.change>=0?"+":""}${nf(d.change)} (${d.change>=0?"+":""}${nf(d.changePct)} %)</div></div></div>
+      <canvas data-spark="${esc(s)}"></canvas>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px">
+        <span class="badge ${badgeCls(d.total.label)}">${esc(d.total.label)}</span>
+        <span class="cnt"><span class="up">▲${d.total.buy}</span>&nbsp;<span class="neu">●${d.total.neutral}</span>&nbsp;<span class="down">▼${d.total.sell}</span></span>
+      </div>
+      <div class="meter"><i style="left:${pos}%"></i></div>
+    </div>`;
+  }).join("");
+  g.querySelectorAll("canvas[data-spark]").forEach(cv => {
+    const d = data[cv.dataset.spark]; if (!d || d.error) return;
+    const c = d.chart.c.slice(-60);
+    drawChart(cv, {n:c.length, series:[{v:c, color: c[c.length-1]>=c[0] ? "#2ecc71" : "#ff5c5c", w:1.5, fill:true}], pad:[2,2,2,2], noAxis:true});
+  });
+  renderDetail();
+}
+
+$("#grid").addEventListener("click", e => {
+  const rm = e.target.closest("[data-rm]");
+  if (rm){ e.stopPropagation(); symbols = symbols.filter(x=>x!==rm.dataset.rm); save("symbols",symbols);
+    if (selected===rm.dataset.rm){ selected=null; save("selected",null);} render(); return; }
+  const c = e.target.closest(".card"); if (!c) return;
+  selected = selected === c.dataset.s ? null : c.dataset.s; save("selected", selected); render();
+  if (selected) $("#detail").scrollIntoView({behavior:"smooth", block:"start"});
+});
+$("#addForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const v = $("#symIn").value.split(/[ ,;]+/).map(s=>s.trim().toUpperCase()).filter(Boolean);
+  for (const s of v) if (!symbols.includes(s)) symbols.push(s);
+  save("symbols", symbols); $("#symIn").value = ""; render(); refresh();
+});
+$("#resetBtn").onclick = () => { symbols = DEFAULT.slice(); save("symbols", symbols); render(); refresh(); };
+$("#nowBtn").onclick = refresh;
+$("#demoBtn").onclick = () => setDemo(!DEMO);
+$("#bannerDemo").onclick = () => setDemo(true);
+$("#sortSel").onchange = e => { sortBy = e.target.value; save("sort", sortBy); render(); };
+
+function renderDetail(){
+  const el = $("#detail");
+  const d = selected && data[selected];
+  if (!d || d.error){ el.style.display = "none"; return; }
+  el.style.display = "block";
+  const cls = d.change >= 0 ? "up" : "down";
+  const groups = Object.entries(d.groups);
+  const t = d.tip;
+  const tipColor = d.total.score >= .15 ? "var(--up)" : d.total.score <= -.15 ? "var(--down)" : "var(--neutral)";
+  const bygroup = {};
+  d.signals.forEach(s => (bygroup[s.group] = bygroup[s.group] || []).push(s));
+  const time = d.marketTime ? new Date(d.marketTime*1000).toLocaleString("de-DE") : "";
+  el.innerHTML = `
+  <div class="dhead">
+    <div><h2>${esc(d.name)} <span class="sub">${esc(d.symbol)} · ${esc(d.exchange)}</span></h2>
+    <div class="sub">Letzter Kurs: ${esc(time)}</div></div>
+    <div style="text-align:right"><div style="font-size:28px;font-weight:800">${nf(d.price)} ${esc(d.currency)}</div>
+    <div class="${cls}">${d.change>=0?"+":""}${nf(d.change)} (${d.change>=0?"+":""}${nf(d.changePct)} %)</div></div>
+  </div>
+  <div class="sumrow">
+    <div class="panel"><h3>Gesamt</h3><span class="badge ${badgeCls(d.total.label)}" style="font-size:14px">${esc(d.total.label)}</span>
+      <div class="meter"><i style="left:${((d.total.score+1)/2*100).toFixed(1)}%"></i></div>
+      <div class="cnt"><span class="up">Kauf ${d.total.buy}</span><span class="neu">Neutral ${d.total.neutral}</span><span class="down">Verkauf ${d.total.sell}</span></div></div>
+    ${groups.map(([g,s])=>`<div class="panel"><h3>${esc(g)}</h3><span class="badge ${badgeCls(s.label)}">${esc(s.label)}</span>
+      <div class="meter"><i style="left:${((s.score+1)/2*100).toFixed(1)}%"></i></div>
+      <div class="cnt"><span class="up">▲${s.buy}</span><span class="neu">●${s.neutral}</span><span class="down">▼${s.sell}</span></div></div>`).join("")}
+  </div>
+  <div class="dgrid">
+    <div>
+      <div class="panel">
+        <h3>Kursverlauf (Tageskerzen)</h3>
+        <div class="legend"><span><b style="background:#58a6ff"></b>SMA 20</span><span><b style="background:var(--sma50)"></b>SMA 50</span>
+        <span><b style="background:var(--sma200)"></b>SMA 200</span><span><b style="background:rgba(88,166,255,.35)"></b>Bollinger (20,2)</span></div>
+        <canvas class="chart" id="cMain" style="height:340px"></canvas>
+        <canvas class="chart" id="cVol" style="height:60px"></canvas>
+      </div>
+      <div class="panel" style="margin-top:12px">
+        <div class="tabs">${["rsi","macd","stoch"].map(k=>`<button data-tab="${k}" class="${chartTab===k?"on":""}">${{rsi:"RSI (14)",macd:"MACD (12,26,9)",stoch:"Stochastik"}[k]}</button>`).join("")}</div>
+        <canvas class="chart" id="cInd" style="height:150px"></canvas>
+      </div>
+    </div>
+    <div>
+      <div class="panel tip" style="border-left-color:${tipColor}">
+        <h3>Tipp</h3>
+        <div class="hl" style="color:${tipColor}">${esc(t.headline)}</div>
+        ${t.reasons.length?`<div class="sub">Wichtigste Gründe:</div><ul>${t.reasons.map(r=>`<li>${esc(r)}</li>`).join("")}</ul>`:""}
+        ${t.plan?`<div>${esc(t.plan)}</div>`:""}
+        ${t.warnings.map(w=>`<div class="warn">⚠ ${esc(w)}</div>`).join("")}
+        <div class="sub" style="margin-top:8px;font-size:11px">Keine Anlageberatung – nur technische Auswertung.</div>
+      </div>
+      <div class="panel" style="margin-top:12px"><h3>Kennzahlen</h3><div class="kv">
+        <span>Tageshoch / -tief</span><span>${nf(d.dayHigh)} / ${nf(d.dayLow)}</span>
+        <span>52 Wochen Hoch / Tief</span><span>${nf(d.high52)} / ${nf(d.low52)}</span>
+        <span>Abstand 52W-Hoch</span><span>${nf((d.price/d.high52-1)*100)} %</span>
+        <span>Volumen heute</span><span>${nf(d.volume,0)}</span>
+      </div></div>
+      <div class="panel" style="margin-top:12px"><h3>Pivot-Punkte (klassisch)</h3><div class="kv">
+        ${Object.entries(d.pivots).map(([k,v])=>`<span>${k}</span><span class="${k[0]==="R"?"down":k[0]==="S"?"up":""}">${nf(v)}${Math.abs(v-d.price)/d.price<0.01?" ← nahe Kurs":""}</span>`).join("")}
+      </div></div>
+    </div>
+  </div>
+  <div class="panel" style="margin-top:12px"><h3>Alle Indikatoren (${d.signals.length})</h3><div class="tablewrap">
+    <table><thead><tr><th>Indikator</th><th>Wert</th><th>Signal</th><th>Bedeutung</th></tr></thead><tbody>
+    ${Object.entries(bygroup).map(([g,arr])=>`<tr class="grp"><td colspan="4">${esc(g)}</td></tr>` +
+      arr.map(s=>`<tr><td>${esc(s.name)}</td><td class="v">${esc(s.value)}</td><td>${sigTxt(s.signal)}</td><td>${esc(s.note)}</td></tr>`).join("")).join("")}
+    </tbody></table></div></div>`;
+  el.querySelectorAll("[data-tab]").forEach(b => b.onclick = () => { chartTab = b.dataset.tab; save("tab", chartTab); renderDetail(); });
+  const ch = d.chart, n = ch.c.length;
+  drawChart($("#cMain"), {n, candles: ch, band:[ch.bbu, ch.bbl],
+    series:[{v:ch.sma20,color:"#58a6ff",w:1},{v:ch.sma50,color:"#f0883e",w:1.5},{v:ch.sma200,color:"#bc8cff",w:1.5}],
+    lastLine: d.price, dates: ch.dates});
+  drawChart($("#cVol"), {n, bars: ch.v.map((v,i)=>({v, color: ch.c[i]>=ch.o[i]?"rgba(46,204,113,.5)":"rgba(255,92,92,.5)"})), zeroBase:true, noAxis:true, pad:[4,58,2,2]});
+  if (chartTab === "rsi") drawChart($("#cInd"), {n, series:[{v:ch.rsi,color:"#e3b341",w:1.5}], hlines:[[70,"rgba(255,92,92,.6)"],[30,"rgba(46,204,113,.6)"],[50,"rgba(139,152,168,.3)"]], yMin:0, yMax:100});
+  if (chartTab === "macd") drawChart($("#cInd"), {n, series:[{v:ch.macd,color:"#58a6ff",w:1.5},{v:ch.msig,color:"#f0883e",w:1.2}],
+    bars: ch.mhist.map(v=>({v, color: v>=0?"rgba(46,204,113,.6)":"rgba(255,92,92,.6)"})), hlines:[[0,"rgba(139,152,168,.4)"]]});
+  if (chartTab === "stoch") drawChart($("#cInd"), {n, series:[{v:ch.stk,color:"#58a6ff",w:1.5},{v:ch.std,color:"#f0883e",w:1.2}], hlines:[[80,"rgba(255,92,92,.6)"],[20,"rgba(46,204,113,.6)"]], yMin:0, yMax:100});
+}
+
+// =====================================================================
+// Datenquelle: Yahoo Finance (direkt oder über öffentliche CORS-Proxys)
+// =====================================================================
+const PROXIES = [
+  u => u,
+  u => "https://corsproxy.io/?url=" + encodeURIComponent(u),
+  u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(u),
+  u => "https://api.codetabs.com/v1/proxy/?quest=" + encodeURIComponent(u),
+];
+let proxyIdx = load("proxy", 0) % PROXIES.length;
+const histCache = {};
+const HIST_MAX_AGE = 5 * 60 * 1000;   // komplette Historie alle 5 Min. neu laden
+let sparkOK = true;                   // Sammelabfrage für Live-Kurse verfügbar?
+
+async function fetchJSON(url){
+  for (let k = 0; k < PROXIES.length; k++){
+    const idx = (proxyIdx + k) % PROXIES.length;
+    const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 8000);
+    try{
+      const r = await fetch(PROXIES[idx](url), {signal: ctl.signal, cache: "no-store"});
+      const j = JSON.parse(await r.text());
+      if (!j || typeof j !== "object" || !(j.chart || j.spark || r.ok)) throw new Error("HTTP " + r.status);
+      if (idx !== proxyIdx){ proxyIdx = idx; save("proxy", idx); }
+      return j;
+    }catch(e){ /* nächsten Weg probieren */ }
+    finally{ clearTimeout(tm); }
+  }
+  const err = new Error("Keine Verbindung zu Yahoo Finance");
+  err.network = true;
+  throw err;
+}
+
+async function fetchChart(sym){
+  const j = await fetchJSON(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(sym)}?range=2y&interval=1d&includePrePost=false`);
+  const res = j.chart && j.chart.result && j.chart.result[0];
+  if (!res) throw new Error((j.chart && j.chart.error && j.chart.error.description) || "Symbol nicht gefunden");
+  const meta = res.meta || {}, ts = res.timestamp || [];
+  const q = (res.indicators && res.indicators.quote && res.indicators.quote[0]) || {};
+  const candles = [];
+  ts.forEach((t, i) => {
+    const at = k => (q[k] || [])[i];
+    const o = at("open"), h = at("high"), l = at("low"), c = at("close");
+    if ([o, h, l, c].some(x => x == null)) return;
+    candles.push({t, o, h, l, c, v: at("volume") || 0});
+  });
+  if (candles.length < 30) throw new Error("Zu wenig Kursdaten");
+  return {symbol: meta.symbol || sym, name: meta.longName || meta.shortName || sym, currency: meta.currency || "",
+          exchange: meta.fullExchangeName || meta.exchangeName || "", marketTime: meta.regularMarketTime,
+          price: meta.regularMarketPrice, candles};
+}
+
+async function fetchLive(syms){
+  const out = {};
+  for (let i = 0; i < syms.length; i += 20){
+    const chunk = syms.slice(i, i + 20);
+    const j = await fetchJSON(`https://query1.finance.yahoo.com/v7/finance/spark?symbols=${encodeURIComponent(chunk.join(","))}&range=1d&interval=5m`);
+    if (j.spark && j.spark.result){
+      j.spark.result.forEach(r => {
+        const m = r.response && r.response[0] && r.response[0].meta;
+        if (m && m.regularMarketPrice) out[String(r.symbol).toUpperCase()] = {p: m.regularMarketPrice, t: m.regularMarketTime};
+      });
+    } else {
+      for (const [k, v] of Object.entries(j)){
+        if (v && Array.isArray(v.close)){
+          const cl = v.close.filter(x => x != null);
+          if (cl.length) out[k.toUpperCase()] = {p: cl[cl.length - 1], t: v.timestamp ? v.timestamp[v.timestamp.length - 1] : null};
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function applyLive(raw, price, time){
+  const r = {...raw, candles: raw.candles.map(c => ({...c}))};
+  if (price){
+    const lc = r.candles[r.candles.length - 1];
+    lc.c = price; lc.h = Math.max(lc.h, price); lc.l = Math.min(lc.l, price);
+  }
+  if (time) r.marketTime = time;
+  return r;
+}
+
+async function loadAll(syms){
+  if (DEMO) return syms.map(s => { try{ return analyze(demoRaw(s)); }catch(e){ return {symbol: s, error: e.message}; } });
+  const now = Date.now();
+  const fresh = syms.filter(s => histCache[s] && now - histCache[s].time < HIST_MAX_AGE);
+  let live = null;
+  if (fresh.length && sparkOK){
+    try{ live = await fetchLive(fresh); if (!Object.keys(live).length){ live = null; sparkOK = false; } }
+    catch(e){ sparkOK = false; }
+  }
+  return Promise.all(syms.map(async s => {
+    try{
+      const hc = histCache[s];
+      if (hc && live && live[s] && now - hc.time < HIST_MAX_AGE) return analyze(applyLive(hc.raw, live[s].p, live[s].t));
+      const raw = await fetchChart(s);
+      histCache[s] = {raw, time: Date.now()};
+      return analyze(applyLive(raw, raw.price, raw.marketTime));
+    }catch(e){ return {symbol: s, error: e.message, network: !!e.network}; }
+  }));
+}
+
+// ---------------------------------------------------------------------
+// Demo-Daten (simulierter Kursverlauf, falls keine Verbindung möglich)
+// ---------------------------------------------------------------------
+const DEMO_NAMES = {
+  "AAPL": ["Apple Inc.", "USD", 190], "MSFT": ["Microsoft Corp.", "USD", 420], "NVDA": ["NVIDIA Corp.", "USD", 120],
+  "AMZN": ["Amazon.com Inc.", "USD", 180], "GOOGL": ["Alphabet Inc.", "USD", 165], "META": ["Meta Platforms Inc.", "USD", 500],
+  "TSLA": ["Tesla Inc.", "USD", 240], "SAP.DE": ["SAP SE", "EUR", 200], "SIE.DE": ["Siemens AG", "EUR", 175],
+  "ALV.DE": ["Allianz SE", "EUR", 270], "BMW.DE": ["BMW AG", "EUR", 90], "MBG.DE": ["Mercedes-Benz Group AG", "EUR", 65],
+  "BTC-USD": ["Bitcoin USD", "USD", 65000], "ETH-USD": ["Ethereum USD", "USD", 3000],
+};
+const demoState = {};
+function seeded(str){
+  let a = 2166136261;
+  for (let i = 0; i < str.length; i++) a = Math.imul(a ^ str.charCodeAt(i), 16777619);
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function gauss(r){ let u = 0; while (!u) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); }
+function demoRaw(sym){
+  if (!demoState[sym]){
+    const [name, cur, start] = DEMO_NAMES[sym] || [sym + " (Demo)", "EUR", 100];
+    const r = seeded(sym), day = 86400, t0 = Math.floor(Date.now() / 1000) - 500 * day;
+    let price = start * 0.7;
+    const drift = -0.0005 + r() * 0.0017, candles = [];
+    for (let i = 0; i < 500; i++){
+      const o = price;
+      price *= Math.exp(drift + gauss(r) * 0.018);
+      const c = price;
+      candles.push({t: t0 + i * day, o, c, h: Math.max(o, c) * (1 + Math.abs(gauss(r) * 0.007)),
+                    l: Math.min(o, c) * (1 - Math.abs(gauss(r) * 0.007)), v: Math.floor(2e6 + r() * 7e6)});
+    }
+    const f = start / candles[candles.length - 1].c;
+    candles.forEach(c => { c.o *= f; c.h *= f; c.l *= f; c.c *= f; });
+    demoState[sym] = {name, currency: cur, candles};
+  }
+  const st = demoState[sym], lc = st.candles[st.candles.length - 1];
+  lc.c *= Math.exp(gauss(Math.random) * 0.002);   // Live-Tick
+  lc.h = Math.max(lc.h, lc.c); lc.l = Math.min(lc.l, lc.c); lc.v += Math.floor(1000 + Math.random() * 49000);
+  return {symbol: sym, name: st.name, currency: st.currency, exchange: "DEMO", marketTime: Math.floor(Date.now() / 1000),
+          candles: st.candles.map(c => ({...c}))};
+}
+
+// =====================================================================
+// Indikatoren (Arrays, null = noch nicht definiert)
+// =====================================================================
+const fmt = (x, d = 2) => x == null || !isFinite(x) ? "–" : x.toLocaleString("de-DE", {minimumFractionDigits: d, maximumFractionDigits: d});
+const last = (v, k = 1) => v.length >= k ? v[v.length - k] : null;
+const sub = (a, b) => a.map((x, i) => x != null && b[i] != null ? x - b[i] : null);
+const rmax = (v, n) => v.map((_, i) => i >= n - 1 ? Math.max(...v.slice(i - n + 1, i + 1)) : null);
+const rmin = (v, n) => v.map((_, i) => i >= n - 1 ? Math.min(...v.slice(i - n + 1, i + 1)) : null);
+
+function sma(v, n){
+  const o = Array(v.length).fill(null);
+  for (let i = n - 1; i < v.length; i++){
+    let s = 0, ok = true;
+    for (let j = i - n + 1; j <= i; j++){ if (v[j] == null){ ok = false; break; } s += v[j]; }
+    if (ok) o[i] = s / n;
+  }
+  return o;
+}
+function smooth(v, n, alpha){
+  const o = Array(v.length).fill(null);
+  let prev = null; const buf = [];
+  v.forEach((x, i) => {
+    if (x == null) return;
+    if (prev == null){ buf.push(x); if (buf.length === n){ prev = buf.reduce((a, b) => a + b, 0) / n; o[i] = prev; } }
+    else { prev = x * alpha + prev * (1 - alpha); o[i] = prev; }
+  });
+  return o;
+}
+const ema = (v, n) => smooth(v, n, 2 / (n + 1));
+const rma = (v, n) => smooth(v, n, 1 / n);   // Wilder-Glättung
+function wma(v, n){
+  const o = Array(v.length).fill(null), den = n * (n + 1) / 2;
+  for (let i = n - 1; i < v.length; i++){
+    let s = 0, ok = true;
+    for (let k = 0; k < n; k++){ const x = v[i - n + 1 + k]; if (x == null){ ok = false; break; } s += x * (k + 1); }
+    if (ok) o[i] = s / den;
+  }
+  return o;
+}
+function stdev(v, n){
+  const o = Array(v.length).fill(null);
+  for (let i = n - 1; i < v.length; i++){
+    const w = v.slice(i - n + 1, i + 1); if (w.includes(null)) continue;
+    const m = w.reduce((a, b) => a + b, 0) / n;
+    o[i] = Math.sqrt(w.reduce((a, x) => a + (x - m) ** 2, 0) / n);
+  }
+  return o;
+}
+function rsi(c, n = 14){
+  const g = [null], lo = [null];
+  for (let i = 1; i < c.length; i++){ g.push(Math.max(c[i] - c[i - 1], 0)); lo.push(Math.max(c[i - 1] - c[i], 0)); }
+  const ag = rma(g, n), al = rma(lo, n);
+  return ag.map((a, i) => { const b = al[i]; if (a == null || b == null) return null; return b === 0 ? 100 : 100 - 100 / (1 + a / b); });
+}
+function trueRange(h, l, c){
+  const o = [h[0] - l[0]];
+  for (let i = 1; i < c.length; i++) o.push(Math.max(h[i] - l[i], Math.abs(h[i] - c[i - 1]), Math.abs(l[i] - c[i - 1])));
+  return o;
+}
+const atr = (h, l, c, n = 14) => rma(trueRange(h, l, c), n);
+function adx(h, l, c, n = 14){
+  const pdm = [null], mdm = [null];
+  for (let i = 1; i < c.length; i++){
+    const up = h[i] - h[i - 1], dn = l[i - 1] - l[i];
+    pdm.push(up > dn && up > 0 ? up : 0); mdm.push(dn > up && dn > 0 ? dn : 0);
+  }
+  const tr = [null, ...trueRange(h, l, c).slice(1)];
+  const st = rma(tr, n), sp = rma(pdm, n), sm = rma(mdm, n), pdi = [], mdi = [], dx = [];
+  for (let i = 0; i < c.length; i++){
+    const t = st[i];
+    if (t == null || t === 0){ pdi.push(null); mdi.push(null); dx.push(null); continue; }
+    const pi = 100 * sp[i] / t, mi = 100 * sm[i] / t;
+    pdi.push(pi); mdi.push(mi); dx.push(pi + mi ? 100 * Math.abs(pi - mi) / (pi + mi) : 0);
+  }
+  return [rma(dx, n), pdi, mdi];
+}
+function psar(h, l, step = 0.02, mx = 0.2){
+  const o = Array(h.length).fill(null);
+  let up = true, af = step, ep = h[0], sar = l[0];
+  for (let i = 1; i < h.length; i++){
+    sar = sar + af * (ep - sar);
+    if (up){
+      sar = Math.min(sar, l[i - 1], i > 1 ? l[i - 2] : l[i - 1]);
+      if (l[i] < sar){ up = false; sar = ep; ep = l[i]; af = step; }
+      else if (h[i] > ep){ ep = h[i]; af = Math.min(af + step, mx); }
+    } else {
+      sar = Math.max(sar, h[i - 1], i > 1 ? h[i - 2] : h[i - 1]);
+      if (h[i] > sar){ up = true; sar = ep; ep = h[i]; af = step; }
+      else if (l[i] < ep){ ep = l[i]; af = Math.min(af + step, mx); }
+    }
+    o[i] = sar;
+  }
+  return o;
+}
+function supertrend(h, l, c, n = 10, mult = 3){
+  const a = atr(h, l, c, n), dir = Array(c.length).fill(null), line = Array(c.length).fill(null);
+  let fu = null, fl = null, d = 1;
+  for (let i = 0; i < c.length; i++){
+    if (a[i] == null) continue;
+    const m = (h[i] + l[i]) / 2, bu = m + mult * a[i], bl = m - mult * a[i];
+    if (fu == null){ fu = bu; fl = bl; }
+    else { fu = (bu < fu || c[i - 1] > fu) ? bu : fu; fl = (bl > fl || c[i - 1] < fl) ? bl : fl; }
+    if (d === 1 && c[i] < fl) d = -1; else if (d === -1 && c[i] > fu) d = 1;
+    dir[i] = d; line[i] = d === 1 ? fl : fu;
+  }
+  return [line, dir];
+}
+
+// =====================================================================
+// Analyse: alle Indikatoren -> Signale -> Bewertung -> Tipp
+// =====================================================================
+const G_MA = "Gleitende Durchschnitte", G_OS = "Oszillatoren", G_TR = "Trend", G_VT = "Volatilität", G_VO = "Volumen";
+
+function analyze(raw){
+  const cs = raw.candles, n = cs.length;
+  const o = cs.map(x => x.o), h = cs.map(x => x.h), l = cs.map(x => x.l), c = cs.map(x => x.c), v = cs.map(x => x.v);
+  const price = c[n - 1], prev = c[n - 2];
+  const hasVol = v.slice(-30).reduce((a, b) => a + b, 0) > 0;
+  const sig = [];
+  const add = (group, name, value, signal, note = "") => sig.push({group, name, value, signal, note});
+  const above = s => s > 0 ? "Kurs darüber" : "Kurs darunter";
+  const obOs = s => s > 0 ? "überverkauft" : s < 0 ? "überkauft" : "neutral";
+
+  // --- Gleitende Durchschnitte ---
+  for (const p of [10, 20, 50, 100, 200]) for (const [kind, fn] of [["SMA", sma], ["EMA", ema]]){
+    const val = last(fn(c, p)); if (val == null) continue;
+    const s = price > val ? 1 : price < val ? -1 : 0;
+    add(G_MA, `${kind} (${p})`, fmt(val), s, above(s));
+  }
+  const hma = wma(sub(wma(c, 4).map(x => x == null ? null : 2 * x), wma(c, 9)), 3);
+  if (last(hma) != null && last(hma, 2) != null){
+    const s = last(hma) > last(hma, 2) ? 1 : -1;
+    add(G_MA, "Hull MA (9)", fmt(last(hma)), s, s > 0 ? "steigend" : "fallend");
+  }
+  const vwma = Array(n).fill(null);
+  for (let i = 19; i < n; i++){ let vs = 0, num = 0; for (let j = i - 19; j <= i; j++){ vs += v[j]; num += c[j] * v[j]; } vwma[i] = vs ? num / vs : null; }
+  if (hasVol && last(vwma) != null){ const s = price > last(vwma) ? 1 : -1; add(G_MA, "VWMA (20)", fmt(last(vwma)), s, above(s)); }
+  const s50 = sma(c, 50), s200 = sma(c, 200);
+  let crossNote = "";
+  if (last(s200) != null){
+    const s = last(s50) > last(s200) ? 1 : -1;
+    for (let k = 1; k <= 10; k++){
+      if (s200[n - k - 1] == null) break;
+      const a = s50[n - k] - s200[n - k], b = s50[n - k - 1] - s200[n - k - 1];
+      if ((a > 0) !== (b > 0)){ crossNote = (a > 0 ? "Golden Cross" : "Death Cross") + ` vor ${k - 1} Tagen`; break; }
+    }
+    add(G_MA, "SMA 50/200 Kreuz", s > 0 ? "Golden" : "Death", s, crossNote || (s > 0 ? "SMA50 über SMA200" : "SMA50 unter SMA200"));
+  }
+
+  // --- Oszillatoren ---
+  const r = rsi(c, 14), rv = last(r);
+  if (rv != null){ const s = rv < 30 ? 1 : rv > 70 ? -1 : 0; add(G_OS, "RSI (14)", fmt(rv, 1), s, s ? obOs(s) : "neutral (30–70)"); }
+
+  const hh14 = rmax(h, 14), ll14 = rmin(l, 14);
+  const rawK = c.map((x, i) => hh14[i] == null ? null : hh14[i] !== ll14[i] ? 100 * (x - ll14[i]) / (hh14[i] - ll14[i]) : 50);
+  const kS = sma(rawK, 3), dS = sma(kS, 3);
+  if (last(dS) != null){
+    const kv = last(kS), dv = last(dS), s = kv < 20 && kv > dv ? 1 : kv > 80 && kv < dv ? -1 : 0;
+    add(G_OS, "Stochastik %K/%D (14,3,3)", `${fmt(kv, 1)} / ${fmt(dv, 1)}`, s,
+        s > 0 ? "überverkauft & dreht" : s < 0 ? "überkauft & dreht" : kv < 20 ? "< 20 überverkauft" : kv > 80 ? "> 80 überkauft" : "neutral");
+  }
+  const rMax = Array(n).fill(null), rMin = Array(n).fill(null);
+  for (let i = 13; i < n; i++){ const w = r.slice(i - 13, i + 1); if (!w.includes(null)){ rMax[i] = Math.max(...w); rMin[i] = Math.min(...w); } }
+  const srsi = r.map((x, i) => rMax[i] == null ? null : rMax[i] !== rMin[i] ? 100 * (x - rMin[i]) / (rMax[i] - rMin[i]) : 50);
+  const srk = sma(srsi, 3), srd = sma(srk, 3);
+  if (last(srd) != null){
+    const kv = last(srk), dv = last(srd), s = kv < 20 && kv > dv ? 1 : kv > 80 && kv < dv ? -1 : 0;
+    add(G_OS, "Stoch RSI (14,14,3,3)", `${fmt(kv, 1)} / ${fmt(dv, 1)}`, s, s > 0 ? "überverkauft & dreht" : s < 0 ? "überkauft & dreht" : "neutral");
+  }
+  const macd = sub(ema(c, 12), ema(c, 26)), msig = ema(macd, 9), mhist = sub(macd, msig);
+  if (last(msig) != null){
+    const s = last(macd) > last(msig) ? 1 : -1;
+    let note = s > 0 ? "MACD über Signallinie" : "MACD unter Signallinie";
+    if (last(mhist, 2) != null && (last(mhist) > 0) !== (last(mhist, 2) > 0))
+      note = "frisches " + (s > 0 ? "Kaufsignal (Kreuzung nach oben)" : "Verkaufssignal (Kreuzung nach unten)");
+    add(G_OS, "MACD (12,26,9)", `${fmt(last(macd))} / ${fmt(last(msig))}`, s, note);
+  }
+  const wr = c.map((x, i) => hh14[i] != null && hh14[i] !== ll14[i] ? -100 * (hh14[i] - x) / (hh14[i] - ll14[i]) : null);
+  if (last(wr) != null){ const s = last(wr) < -80 ? 1 : last(wr) > -20 ? -1 : 0; add(G_OS, "Williams %R (14)", fmt(last(wr), 1), s, obOs(s)); }
+  const tp = c.map((x, i) => (h[i] + l[i] + x) / 3), tps = sma(tp, 20), cci = Array(n).fill(null);
+  for (let i = 19; i < n; i++){ let md = 0; for (let j = i - 19; j <= i; j++) md += Math.abs(tp[j] - tps[i]); md /= 20; cci[i] = md ? (tp[i] - tps[i]) / (0.015 * md) : 0; }
+  if (last(cci) != null){ const s = last(cci) < -100 ? 1 : last(cci) > 100 ? -1 : 0; add(G_OS, "CCI (20)", fmt(last(cci), 1), s, s ? obOs(s) : "neutral (±100)"); }
+  const mom = c.map((x, i) => i >= 10 ? x - c[i - 10] : null);
+  if (last(mom) != null){ const s = last(mom) > 0 ? 1 : -1; add(G_OS, "Momentum (10)", fmt(last(mom)), s, s > 0 ? "positiv" : "negativ"); }
+  const roc = c.map((x, i) => i >= 12 ? 100 * (x / c[i - 12] - 1) : null);
+  if (last(roc) != null){ const s = last(roc) > 0 ? 1 : -1; add(G_OS, "ROC (12)", fmt(last(roc)) + " %", s, s > 0 ? "positiv" : "negativ"); }
+  const med = h.map((x, i) => (x + l[i]) / 2), ao = sub(sma(med, 5), sma(med, 34));
+  if (last(ao, 2) != null){
+    const rising = last(ao) > last(ao, 2), s = last(ao) > 0 && rising ? 1 : last(ao) < 0 && !rising ? -1 : 0;
+    add(G_OS, "Awesome Oscillator", fmt(last(ao)), s, (last(ao) > 0 ? "über 0" : "unter 0") + (rising ? ", steigend" : ", fallend"));
+  }
+  if (n > 30){
+    const bp = [], trr = [];
+    for (let i = 1; i < n; i++){ bp[i] = c[i] - Math.min(l[i], c[i - 1]); trr[i] = Math.max(h[i], c[i - 1]) - Math.min(l[i], c[i - 1]); }
+    const ar = p => { let tb = 0, tt = 0; for (let i = n - p; i < n; i++){ tb += bp[i]; tt += trr[i]; } return tt ? tb / tt : 0; };
+    const uo = 100 * (4 * ar(7) + 2 * ar(14) + ar(28)) / 7, s = uo < 30 ? 1 : uo > 70 ? -1 : 0;
+    add(G_OS, "Ultimate Oscillator", fmt(uo, 1), s, obOs(s));
+  }
+  const tr1 = ema(ema(ema(c, 15), 15), 15);
+  const trix = tr1.map((x, i) => i > 0 && x && tr1[i - 1] ? 100 * (x / tr1[i - 1] - 1) : null);
+  if (last(trix) != null){ const s = last(trix) > 0 ? 1 : -1; add(G_OS, "TRIX (15)", fmt(last(trix), 3), s, s > 0 ? "positiv" : "negativ"); }
+  const e13 = ema(c, 13);
+  if (last(e13) != null){
+    const E = last(e13), E2 = last(e13, 2), bull = h[n - 1] - E, bear = l[n - 1] - E;
+    const s = bear < 0 && bear > l[n - 2] - E2 && E > E2 ? 1 : bull > 0 && bull < h[n - 2] - E2 && E < E2 ? -1 : 0;
+    add(G_OS, "Elder Bull/Bear Power (13)", `${fmt(bull)} / ${fmt(bear)}`, s,
+        s > 0 ? "Bären lassen nach im Aufwärtstrend" : s < 0 ? "Bullen lassen nach im Abwärtstrend" : "neutral");
+  }
+
+  // --- Trend ---
+  const [adxV, pdi, mdi] = adx(h, l, c, 14);
+  if (last(adxV) != null){
+    const a = last(adxV), s = a > 20 ? (last(pdi) > last(mdi) ? 1 : -1) : 0;
+    add(G_TR, "ADX / DMI (14)", `${fmt(a, 1)} (+DI ${fmt(last(pdi), 1)} / −DI ${fmt(last(mdi), 1)})`, s,
+        (a > 25 ? "starker " : "") + (s > 0 ? "Aufwärtstrend" : s < 0 ? "Abwärtstrend" : "kein klarer Trend (ADX<20)"));
+  }
+  const ps = psar(h, l);
+  if (last(ps) != null){ const s = price > last(ps) ? 1 : -1; add(G_TR, "Parabolic SAR", fmt(last(ps)), s, s > 0 ? "SAR unter Kurs" : "SAR über Kurs"); }
+  const [stLine, stDir] = supertrend(h, l, c, 10, 3);
+  if (last(stDir) != null){ const s = last(stDir); add(G_TR, "Supertrend (10,3)", fmt(last(stLine)), s, s > 0 ? "grün/aufwärts" : "rot/abwärts"); }
+  if (n >= 78){
+    const half = (A, B) => A.map((x, i) => x == null ? null : (x + B[i]) / 2);
+    const ten = half(rmax(h, 9), rmin(l, 9)), kij = half(rmax(h, 26), rmin(l, 26)), sb = half(rmax(h, 52), rmin(l, 52));
+    const spanA = (ten[n - 27] + kij[n - 27]) / 2, spanB = sb[n - 27], top = Math.max(spanA, spanB), bot = Math.min(spanA, spanB);
+    let s, note;
+    if (price > top && ten[n - 1] > kij[n - 1]){ s = 1; note = "Kurs über der Wolke, Tenkan > Kijun"; }
+    else if (price < bot && ten[n - 1] < kij[n - 1]){ s = -1; note = "Kurs unter der Wolke, Tenkan < Kijun"; }
+    else { s = 0; note = bot <= price && price <= top ? "Kurs in/nahe der Wolke" : "gemischt"; }
+    add(G_TR, "Ichimoku (9,26,52)", `Wolke ${fmt(bot)}–${fmt(top)}`, s, note);
+  }
+  if (n > 26){
+    const wh = h.slice(-26), wl = l.slice(-26);
+    const up = 100 * wh.indexOf(Math.max(...wh)) / 25, dn = 100 * wl.indexOf(Math.min(...wl)) / 25;
+    const s = up > 70 && dn < 30 ? 1 : dn > 70 && up < 30 ? -1 : 0;
+    add(G_TR, "Aroon (25)", `↑${fmt(up, 0)} / ↓${fmt(dn, 0)}`, s, s > 0 ? "Aufwärtstrend" : s < 0 ? "Abwärtstrend" : "neutral");
+  }
+  if (n > 21){
+    const dh = Math.max(...h.slice(-21, -1)), dl = Math.min(...l.slice(-21, -1)), s = price > dh ? 1 : price < dl ? -1 : 0;
+    add(G_TR, "Donchian-Ausbruch (20)", `${fmt(dl)}–${fmt(dh)}`, s, s > 0 ? "Ausbruch nach oben" : s < 0 ? "Ausbruch nach unten" : "innerhalb des Kanals");
+  }
+
+  // --- Volatilität ---
+  const mid = sma(c, 20), sd = stdev(c, 20);
+  const bbu = mid.map((m, i) => m == null ? null : m + 2 * sd[i]), bbl = mid.map((m, i) => m == null ? null : m - 2 * sd[i]);
+  if (last(mid) != null){
+    const width = bbu[n - 1] - bbl[n - 1], pb = width ? (price - bbl[n - 1]) / width : 0.5, s = pb < 0 ? 1 : pb > 1 ? -1 : 0;
+    add(G_VT, "Bollinger-Bänder (20,2)", `${fmt(bbl[n - 1])}–${fmt(bbu[n - 1])} (%B ${fmt(pb, 2)})`, s,
+        s > 0 ? "unter unterem Band" : s < 0 ? "über oberem Band" : "innerhalb der Bänder");
+  }
+  const atrV = last(atr(h, l, c, 14)), e20 = ema(c, 20), a10 = atr(h, l, c, 10);
+  if (last(e20) != null && last(a10) != null){
+    const ku = last(e20) + 2 * last(a10), kl = last(e20) - 2 * last(a10), s = price < kl ? 1 : price > ku ? -1 : 0;
+    add(G_VT, "Keltner-Kanal (20,2)", `${fmt(kl)}–${fmt(ku)}`, s, s > 0 ? "unter Kanal (überverkauft)" : s < 0 ? "über Kanal (überkauft)" : "innerhalb");
+  }
+  if (atrV != null) add(G_VT, "ATR (14)", `${fmt(atrV)} (${fmt(100 * atrV / price, 2)} %)`, 0, "Volatilitätsmaß (nur Info)");
+
+  // --- Volumen ---
+  if (hasVol){
+    const obv = [0];
+    for (let i = 1; i < n; i++) obv.push(obv[i - 1] + (c[i] > c[i - 1] ? v[i] : c[i] < c[i - 1] ? -v[i] : 0));
+    let s = obv[n - 1] > last(sma(obv, 20)) ? 1 : -1;
+    add(G_VO, "On-Balance-Volume", fmt(obv[n - 1] / 1e6, 1) + " Mio", s, s > 0 ? "über 20-Tage-Schnitt" : "unter 20-Tage-Schnitt");
+    let pos = 0, neg = 0;
+    for (let i = n - 14; i < n; i++){ const f = tp[i] * v[i]; if (tp[i] > tp[i - 1]) pos += f; else if (tp[i] < tp[i - 1]) neg += f; }
+    const mfi = neg === 0 ? 100 : 100 - 100 / (1 + pos / neg);
+    s = mfi < 20 ? 1 : mfi > 80 ? -1 : 0;
+    add(G_VO, "Money Flow Index (14)", fmt(mfi, 1), s, obOs(s));
+    let num = 0, den = 0;
+    for (let i = n - 20; i < n; i++){ const rg = h[i] - l[i]; num += (rg ? ((c[i] - l[i]) - (h[i] - c[i])) / rg : 0) * v[i]; den += v[i]; }
+    const cmf = den ? num / den : 0;
+    s = cmf > 0.05 ? 1 : cmf < -0.05 ? -1 : 0;
+    add(G_VO, "Chaikin Money Flow (20)", fmt(cmf, 3), s, s > 0 ? "Kaufdruck" : s < 0 ? "Verkaufsdruck" : "neutral");
+    let tv = 0, sv = 0;
+    for (let i = n - 20; i < n; i++){ tv += tp[i] * v[i]; sv += v[i]; }
+    const vwap = tv / (sv || 1);
+    s = price > vwap ? 1 : -1;
+    add(G_VO, "VWAP (20 Tage)", fmt(vwap), s, above(s));
+    const avgv = v.slice(n - 21, n - 1).reduce((a, b) => a + b, 0) / 20, ratio = avgv ? v[n - 1] / avgv : 1, dayUp = c[n - 1] >= c[n - 2];
+    s = ratio > 1.5 ? (dayUp ? 1 : -1) : 0;
+    add(G_VO, "Volumen vs. Ø20", `${fmt(ratio, 2)}×`, s, ratio > 1.5 ? "hohes Volumen bei " + (dayUp ? "Anstieg" : "Rückgang") : "normal");
+  }
+
+  // --- Pivot-Punkte (Vortag) ---
+  const H = h[n - 2], L = l[n - 2], C = c[n - 2], P = (H + L + C) / 3;
+  const pivots = {R3: H + 2 * (P - L), R2: P + (H - L), R1: 2 * P - L, P, S1: 2 * P - H, S2: P - (H - L), S3: L - 2 * (H - P)};
+
+  // --- Zusammenfassung ---
+  const summarize = items => {
+    const rated = items.filter(x => !(x.signal === 0 && x.note.includes("nur Info")));
+    const b = rated.filter(x => x.signal > 0).length, s = rated.filter(x => x.signal < 0).length;
+    const score = rated.length ? (b - s) / rated.length : 0;
+    return {buy: b, sell: s, neutral: rated.length - b - s, score: Math.round(score * 1000) / 1000, label: label(score)};
+  };
+  const groups = {};
+  for (const g of [G_MA, G_OS, G_TR, G_VT, G_VO]){ const it = sig.filter(x => x.group === g); if (it.length) groups[g] = summarize(it); }
+  const total = summarize(sig);
+  // Gesamt = Durchschnitt der Gruppen, damit die vielen Durchschnittslinien nicht alles dominieren
+  const gs = Object.values(groups).map(g => g.score);
+  total.score = gs.length ? Math.round(gs.reduce((a, b) => a + b, 0) / gs.length * 1000) / 1000 : 0;
+  total.label = label(total.score);
+  const tip = buildTip(total, sig, price, atrV, pivots, rv, crossNote, raw.currency || "");
+
+  const k = Math.min(160, n), tail = a => a.slice(n - k), change = price - prev;
+  const yearAgo = cs[n - 1].t - 365 * 86400, year = cs.filter(x => x.t >= yearAgo);   // Kalendertage (auch für Krypto)
+  return {
+    symbol: raw.symbol, name: raw.name, currency: raw.currency, exchange: raw.exchange, marketTime: raw.marketTime,
+    price, change, changePct: 100 * change / prev, dayHigh: h[n - 1], dayLow: l[n - 1],
+    high52: Math.max(...year.map(x => x.h)), low52: Math.min(...year.map(x => x.l)), volume: v[n - 1],
+    signals: sig, groups, total, tip, pivots,
+    chart: {
+      dates: cs.slice(n - k).map(x => new Date(x.t * 1000).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "UTC"})),
+      o: tail(o), h: tail(h), l: tail(l), c: tail(c), sma20: tail(mid), sma50: tail(s50), sma200: tail(s200),
+      bbu: tail(bbu), bbl: tail(bbl), rsi: tail(r), macd: tail(macd), msig: tail(msig), mhist: tail(mhist),
+      stk: tail(kS), std: tail(dS), v: tail(v),
+    },
+  };
+}
+
+function label(score){
+  if (score >= 0.5) return "Starker Kauf";
+  if (score >= 0.15) return "Kaufen";
+  if (score <= -0.5) return "Starker Verkauf";
+  if (score <= -0.15) return "Verkaufen";
+  return "Halten / Neutral";
+}
+
+function buildTip(total, sig, price, atrV, pivots, rsiV, crossNote, cur){
+  const sc = total.score, cnt = total.buy + total.sell + total.neutral;
+  const prio = ["RSI", "MACD", "SMA 50/200", "Supertrend", "ADX", "Ichimoku", "Bollinger", "Stochastik", "Money Flow"];
+  const rank = t => { const i = prio.findIndex(p => t.startsWith(p)); return i < 0 ? 99 : i; };
+  const top = rs => rs.slice().sort((a, b) => rank(a) - rank(b)).slice(0, 5);
+  const rBuy = sig.filter(x => x.signal > 0).map(x => `${x.name}: ${x.note}`);
+  const rSell = sig.filter(x => x.signal < 0).map(x => `${x.name}: ${x.note}`);
+  let head, lines, plan = "";
+  if (sc >= 0.15){
+    head = `${total.label}: ${total.buy} von ${cnt} Indikatoren zeigen nach oben.`;
+    lines = top(rBuy);
+    if (atrV){
+      const res = Object.entries(pivots).filter(([k, p]) => k[0] === "R" && p > price).map(([, p]) => p);
+      plan = `Möglicher Einstieg um ${fmt(price)} ${cur}. Stop-Loss ca. ${fmt(price - 2 * atrV)} ${cur} (2× ATR), ` +
+             `Kursziel ca. ${fmt(price + 3 * atrV)} ${cur} (3× ATR)` + (res.length ? `, nächster Widerstand ${fmt(Math.min(...res))} ${cur}` : "") + ".";
+    }
+  } else if (sc <= -0.15){
+    head = `${total.label}: ${total.sell} von ${cnt} Indikatoren zeigen nach unten.`;
+    lines = top(rSell);
+    if (atrV){
+      const sup = Object.entries(pivots).filter(([k, p]) => k[0] === "S" && p < price).map(([, p]) => p);
+      plan = `Bestehende Positionen absichern oder reduzieren. Wer investiert bleibt: Stop ca. ${fmt(price - 1.5 * atrV)} ${cur}.` +
+             (sup.length ? ` Nächste Unterstützung ${fmt(Math.max(...sup))} ${cur}.` : "");
+    }
+  } else {
+    head = `Halten / Abwarten: Signale sind gemischt (${total.buy} Kauf, ${total.sell} Verkauf, ${total.neutral} neutral).`;
+    lines = top(rBuy).slice(0, 2).concat(top(rSell).slice(0, 2));
+    plan = "Auf klare Bestätigung warten (z. B. MACD-Kreuzung oder Ausbruch aus dem Donchian-Kanal).";
+  }
+  const warnings = [];
+  if (rsiV != null && rsiV > 75 && sc > 0) warnings.push("Achtung: RSI stark überkauft – Rücksetzer möglich, nicht hinterherlaufen.");
+  if (rsiV != null && rsiV < 25 && sc < 0) warnings.push("Achtung: RSI stark überverkauft – technische Gegenbewegung möglich.");
+  if (crossNote) warnings.push(crossNote + ".");
+  return {headline: head, reasons: lines, plan, warnings};
+}
+
+// Einfacher Canvas-Chart ohne externe Bibliotheken
+function drawChart(cv, o){
+  const dpr = window.devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if (!W || !H) return;
+  cv.width = W*dpr; cv.height = H*dpr;
+  const x = cv.getContext("2d"); x.scale(dpr, dpr); x.clearRect(0,0,W,H);
+  const [pt, pr, pb, pl] = o.pad || [8, 58, o.dates ? 18 : 6, 4];
+  let vals = [];
+  (o.series||[]).forEach(s => s.v.forEach(v => v!=null && vals.push(v)));
+  if (o.candles){ o.candles.h.forEach(v=>vals.push(v)); o.candles.l.forEach(v=>vals.push(v)); }
+  if (o.band) o.band.forEach(b => b.forEach(v => v!=null && vals.push(v)));
+  if (o.bars) o.bars.forEach(b => b.v!=null && vals.push(b.v));
+  (o.hlines||[]).forEach(h => vals.push(h[0]));
+  if (o.zeroBase) vals.push(0);
+  if (!vals.length) return;
+  let lo = o.yMin != null ? o.yMin : Math.min(...vals), hi = o.yMax != null ? o.yMax : Math.max(...vals);
+  if (hi === lo){ hi += 1; lo -= 1; }
+  if (o.yMin == null && !o.zeroBase){ const m = (hi-lo)*0.05; hi += m; lo -= m; }
+  const n = o.n, cw = (W-pl-pr)/n;
+  const X = i => pl + cw*(i+0.5), Y = v => pt + (hi - v)/(hi - lo)*(H-pt-pb);
+  if (!o.noAxis){
+    x.strokeStyle = "rgba(139,152,168,.12)"; x.fillStyle = "#8b98a8"; x.font = "11px system-ui"; x.lineWidth = 1;
+    for (let k=0;k<=4;k++){ const v = lo + (hi-lo)*k/4, y = Y(v);
+      x.beginPath(); x.moveTo(pl,y); x.lineTo(W-pr,y); x.stroke();
+      x.fillText(nf(v, Math.abs(hi) < 10 ? 2 : Math.abs(hi) < 1000 ? 1 : 0), W-pr+4, y+4); }
+    if (o.dates){ const step = Math.ceil(n/6);
+      for (let i=0;i<n;i+=step) x.fillText(o.dates[i], Math.max(pl, X(i)-20), H-4); }
+  }
+  (o.hlines||[]).forEach(([v,c]) => { x.strokeStyle=c; x.setLineDash([4,4]); x.beginPath(); x.moveTo(pl,Y(v)); x.lineTo(W-pr,Y(v)); x.stroke(); x.setLineDash([]); });
+  if (o.band){ const [u,l] = o.band; x.fillStyle = "rgba(88,166,255,.08)"; x.strokeStyle = "rgba(88,166,255,.35)"; x.beginPath();
+    let started=false; for (let i=0;i<n;i++) if (u[i]!=null){ started ? x.lineTo(X(i),Y(u[i])) : x.moveTo(X(i),Y(u[i])); started=true; }
+    for (let i=n-1;i>=0;i--) if (l[i]!=null) x.lineTo(X(i),Y(l[i]));
+    x.closePath(); x.fill(); }
+  if (o.bars){ const z = Y(Math.max(lo, 0));
+    o.bars.forEach((b,i) => { if (b.v==null) return; x.fillStyle = b.color; const y = Y(b.v); x.fillRect(X(i)-cw*0.4, Math.min(y,z), Math.max(cw*0.8,1), Math.abs(z-y)||1); }); }
+  if (o.candles){ const c = o.candles;
+    for (let i=0;i<n;i++){ const up = c.c[i] >= c.o[i]; x.strokeStyle = x.fillStyle = up ? "#2ecc71" : "#ff5c5c";
+      x.beginPath(); x.moveTo(X(i),Y(c.h[i])); x.lineTo(X(i),Y(c.l[i])); x.stroke();
+      const y1 = Y(Math.max(c.o[i],c.c[i])), y2 = Y(Math.min(c.o[i],c.c[i]));
+      x.fillRect(X(i)-Math.max(cw*0.35,0.5), y1, Math.max(cw*0.7,1), Math.max(y2-y1,1)); } }
+  (o.series||[]).forEach(s => {
+    x.strokeStyle = s.color; x.lineWidth = s.w || 1; x.beginPath(); let st=false, first=null, lastI=null;
+    s.v.forEach((v,i) => { if (v==null) return; if (!st){ x.moveTo(X(i),Y(v)); st=true; first=i; } else x.lineTo(X(i),Y(v)); lastI=i; });
+    x.stroke();
+    if (s.fill && st){ x.lineTo(X(lastI), H); x.lineTo(X(first), H); x.closePath(); x.globalAlpha=.12; x.fillStyle=s.color; x.fill(); x.globalAlpha=1; }
+  });
+  if (o.lastLine != null){ const y = Y(o.lastLine); x.strokeStyle="rgba(230,237,243,.5)"; x.setLineDash([2,3]); x.beginPath(); x.moveTo(pl,y); x.lineTo(W-pr,y); x.stroke(); x.setLineDash([]);
+    x.fillStyle = "#58a6ff"; x.fillRect(W-pr+1, y-8, pr-2, 16); x.fillStyle="#04111f"; x.font="bold 11px system-ui"; x.fillText(nf(o.lastLine), W-pr+4, y+4); }
+}
+window.addEventListener("resize", () => { clearTimeout(window._rt); window._rt = setTimeout(render, 150); });
+
+render(); refresh();
+</script>
+
