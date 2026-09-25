@@ -103,6 +103,8 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;backgroun
 .nm{color:var(--muted);font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .c-right{display:flex;align-items:center;gap:4px;flex:none}
 .rm{border:0;background:transparent;color:var(--muted);font-size:18px;line-height:1;padding:2px 6px;border-radius:6px;cursor:pointer;opacity:.55}
+.pb.p2{color:var(--warn);opacity:1}.pb.p0{opacity:.4}.card.lowp{opacity:.8}
+.prioseg{display:inline-flex;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:3px}
 .rm:hover{opacity:1;background:var(--surface2)}
 .c-price{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .px{font-size:23px;font-weight:600;letter-spacing:-.01em}
@@ -255,6 +257,13 @@ const MIN_LIMIT = 7;            // … und 8 pro Minute (eine als Reserve)
 const DAY_RESERVE = 20;         // Rest für neu hinzugefügte Werte
 const SYMBOL_GAP = 60 * 1000;   // ein Wert höchstens einmal pro Minute
 const CLOSED_GAP = 15 * 60 * 1000; // Börse zu: nur alle 15 Minuten nachsehen
+// Priorität je Wert: bestimmt Reihenfolge und wie oft Kurse und Stundenkerzen geladen werden
+const PRIO = {2: {name: "Hoch", gap: 20e3, closed: 10 * 60e3, intra: 10 * 60e3, w: 3},
+              1: {name: "Normal", gap: 60e3, closed: 15 * 60e3, intra: 20 * 60e3, w: 1},
+              0: {name: "Niedrig", gap: 5 * 60e3, closed: 60 * 60e3, intra: 60 * 60e3, w: 0.3}};
+let prio = load("prio", {});
+const prioOf = s => prio[s] != null ? prio[s] : 1;
+function setPrio(s, v){ prio[s] = v; save("prio", prio); if (store[s]) store[s].nextQuoteAt = 0; render(); }
 const DEFAULT = ["NVDA","AAPL","BTC/USD","MSFT","AMZN","GOOGL","META","TSLA","SAP","AMD"];
 const NAMES = {NVDA:"NVIDIA", AAPL:"Apple", "BTC/USD":"Bitcoin", MSFT:"Microsoft", AMZN:"Amazon",
   GOOGL:"Alphabet (Google)", META:"Meta Platforms", TSLA:"Tesla", SAP:"SAP (Börse New York)", AMD:"AMD"};
@@ -373,7 +382,7 @@ async function loadHistory(sym){
 }
 async function loadQuote(sym){
   const e = store[sym];
-  e.nextQuoteAt = Date.now() + SYMBOL_GAP;
+  e.nextQuoteAt = Date.now() + PRIO[prioOf(sym)].gap;
   const q = parseCSV(await td("get_quote", tdArgs(sym)))[0];
   if (!q) throw apiError("Leere Antwort");
   e.name = q.name || e.name;
@@ -387,7 +396,7 @@ async function loadQuote(sym){
     const cs = e.candles, lc = cs[cs.length - 1];
     if (c.t === lc.t) cs[cs.length - 1] = c; else if (c.t > lc.t) cs.push(c);
   }
-  if (!e.marketOpen) e.nextQuoteAt = Date.now() + CLOSED_GAP;
+  if (!e.marketOpen) e.nextQuoteAt = Date.now() + PRIO[prioOf(sym)].closed;
   recompute(sym);
   mergeIntraQuote(sym, c.c);
 }
@@ -441,13 +450,14 @@ async function guarded(sym, fn){
 
 function nextLive(){
   const now = Date.now();
-  for (let k = 0; k < symbols.length; k++){
-    const s = symbols[(rr + k) % symbols.length], e = store[s];
+  let best = null, bestScore = -1;
+  for (const s of symbols){
+    const e = store[s];
     if (!e || !e.candles || e.error || (e.nextQuoteAt && now < e.nextQuoteAt)) continue;
-    rr = (rr + k + 1) % symbols.length;
-    return s;
+    const score = (now - (e.quotedAt || 0)) * PRIO[prioOf(s)].w;
+    if (score > bestScore){ bestScore = score; best = s; }
   }
-  return null;
+  return best;
 }
 
 async function tick(force){
@@ -549,7 +559,7 @@ async function guardedIntra(s){
   }finally{ it.loading = false; }
 }
 function nextIntra(){
-  const order = selected ? [selected, ...symbols.filter(x => x !== selected)] : symbols;
+  const order = symbols.slice().sort((a, b) => (b === selected) - (a === selected) || prioOf(b) - prioOf(a));
   const now = Date.now();
   for (const s of order){
     if (!intraWanted(s) || !store[s] || !store[s].candles) continue;
@@ -559,7 +569,7 @@ function nextIntra(){
       const cached = load("h1_" + s, null);
       if (cached && now - cached.fetchedAt < INTRA_AGE){ it.candles = cached.candles; it.fetchedAt = cached.fetchedAt; recomputeIntra(s); continue; }
     }
-    let maxAge = s === selected ? 10 * 60 * 1000 : INTRA_AGE;
+    let maxAge = s === selected ? 10 * 60 * 1000 : PRIO[prioOf(s)].intra;
     if (!isCrypto(s) && store[s].marketOpen === false) maxAge = 60 * 60 * 1000;   // Börse zu: seltener
     if (!it.fetchedAt || now - it.fetchedAt > maxAge) return s;
   }
@@ -645,7 +655,7 @@ function updateNote(){
   if (mode === "demo") return;
   $("#note").innerHTML = `<b>Echte Kurse von Twelve Data.</b> Alle ${everySec} s wird reihum ein Wert aktualisiert · heute <b class="num">${usedToday()}</b> von ${DAY_LIMIT} Abfragen genutzt ·
     <details><summary>So funktioniert es</summary><span class="more">Dein kostenloser Tarif erlaubt 800 Abfragen pro Tag und 8 pro Minute. Deshalb wird reihum ein Wert aktualisiert, jeder höchstens einmal pro Minute,
-    bei geschlossener Börse nur alle 15 Minuten. Die Kurshistorie (etwa 4 Jahre) wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten, SAP gibt es aber über die Börse New York. Für Stunden-Prognosen werden zusätzlich Stundenkerzen geladen: 1 Abfrage je Wert, höchstens alle 20 Minuten und nur, wenn ein Stunden-Zeitraum gewählt ist.</span></details>`;
+    bei geschlossener Börse nur alle 15 Minuten. Die Kurshistorie (etwa 4 Jahre) wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten, SAP gibt es aber über die Börse New York. Mit dem Stern auf jeder Karte legst du die Priorität fest: ★ Hoch = oben und etwa 3× so oft aktualisiert, ☆ Normal, ▽ Niedrig = unten und selten aktualisiert (spart Abfragen). Für Stunden-Prognosen werden zusätzlich Stundenkerzen geladen: 1 Abfrage je Wert, höchstens alle 20 Minuten und nur, wenn ein Stunden-Zeitraum gewählt ist.</span></details>`;
 }
 function updateBanner(){
   let txt = "", demoBtn = false;
@@ -693,6 +703,7 @@ function whenTxt(d){
   if (d.quotedAt) return "aktualisiert " + hhmm(d.quotedAt) + (d.marketOpen === false ? " · Börse zu" : "");
   return "Stand " + new Date(d.marketTime * 1000).toLocaleDateString("de-DE", {timeZone: "UTC"});
 }
+const prioBtn = s => { const v = prioOf(s); return `<button class="rm pb p${v}" type="button" data-prio="${esc(s)}" aria-label="Priorität von ${esc(s)}: ${PRIO[v].name}" title="Priorität: ${PRIO[v].name} (tippen zum Ändern)">${v === 2 ? "★" : v === 0 ? "▽" : "☆"}</button>`; };
 const rmBtn = s => `<button class="rm" type="button" data-rm="${esc(s)}" aria-label="${esc(s)} entfernen" title="Entfernen">×</button>`;
 function cardHTML(s){
   const d = data[s];
@@ -704,7 +715,7 @@ function cardHTML(s){
   lastPrice[s] = d.price;
   return `<div class="card ${flash}" role="button" tabindex="0" data-s="${esc(s)}" aria-label="${esc(d.name)}: Details öffnen">
     <div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div></div>
-      <div class="c-right"><span class="pill ${pillCls(d.total.label)}">${esc(d.total.label)}</span>${rmBtn(s)}</div></div>
+      <div class="c-right"><span class="pill ${pillCls(d.total.label)}">${esc(d.total.label)}</span>${prioBtn(s)}${rmBtn(s)}</div></div>
     <div class="c-price"><span class="px num">${nf(d.price)}</span><span class="cur">${esc(d.currency)}</span><span class="chg num ${d.change >= 0 ? "up" : "down"}">${sp(d.changePct / 100, 2)}</span></div>
     <canvas class="spark" data-spark="${esc(s)}" aria-hidden="true"></canvas>
     <div class="fc"><span>Prognose ${esc(hzLabel(hz))}</span>${f ? `<span><b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b> <span class="muted">· Anstieg ${pc(f.pUp)}</span></span>` : `<span class="muted">${esc(intraMsg(s))}</span>`}</div>
@@ -734,6 +745,7 @@ function renderOverview(){
   if (sortBy === "chg") list.sort((a, b) => val(b, x => x.changePct, -999) - val(a, x => x.changePct, -999));
   const fcv = s => { const f = fcFor(s); return f ? f.exp : -9; };
   if (sortBy === "fc") list.sort((a, b) => fcv(b) - fcv(a));
+  list.sort((a, b) => prioOf(b) - prioOf(a));   // stabil: Priorität zuerst, innerhalb davon die gewählte Sortierung
   renderSummary();
   $("#grid").innerHTML = list.map(cardHTML).join("");
   document.querySelectorAll("canvas[data-spark]").forEach(cv => {
@@ -845,7 +857,8 @@ function renderDetail(){
   }
   $("#detail").innerHTML = `
     <div class="dnav"><button class="btn ghost" type="button" id="backBtn">← Übersicht</button>
-      <button class="btn ghost" type="button" id="rmDetail">Aus Liste entfernen</button></div>
+      <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="eyebrow">Priorität</span><span class="prioseg">${[2, 1, 0].map(v => `<button type="button" class="chip ${prioOf(selected) === v ? "on" : ""}" data-setprio="${v}">${PRIO[v].name}</button>`).join("")}</span>
+      <button class="btn ghost" type="button" id="rmDetail">Aus Liste entfernen</button></span></div>
     <div class="dhead"><div><h2>${esc(d.name)}</h2><div class="dsub">${esc(d.symbol)}${d.exchange ? " · " + esc(d.exchange) : ""} · Letzter Kurs ${esc(time)}</div></div>
       <div class="dprice"><span class="px num">${nf(d.price)}</span> <span class="cur">${esc(d.currency)}</span><div class="num ${d.change >= 0 ? "up" : "down"}">${d.change >= 0 ? "+" : "−"}${nf(Math.abs(d.change))} (${sp(d.changePct / 100, 2)})</div></div></div>
     <div class="hero ${up ? "dir-up" : "dir-down"}">
@@ -894,6 +907,8 @@ function removeSym(s){
   render();
 }
 $("#grid").addEventListener("click", e => {
+  const pb = e.target.closest("[data-prio]");
+  if (pb){ e.stopPropagation(); const v = prioOf(pb.dataset.prio); setPrio(pb.dataset.prio, v === 1 ? 2 : v === 2 ? 0 : 1); return; }
   const rm = e.target.closest("[data-rm]");
   if (rm){ e.stopPropagation(); removeSym(rm.dataset.rm); return; }
   const c = e.target.closest(".card"); if (c) openSym(c.dataset.s);
@@ -908,6 +923,7 @@ document.addEventListener("keydown", e => {
 $("#detail").addEventListener("click", e => {
   if (e.target.closest("#backBtn")) return closeDetail();
   if (e.target.closest("#rmDetail")) return removeSym(selected);
+  const sp_ = e.target.closest("[data-setprio]"); if (sp_){ setPrio(selected, +sp_.dataset.setprio); return; }
   const dt = e.target.closest("[data-dtab]"); if (dt){ dTab = dt.dataset.dtab; save("dtab", dTab); renderDetail(); return; }
   if (e.target.closest("[data-intra]")){ wantIntra.add(selected); if (mode === "demo") demoTick(); else { render(); tick(); } return; }
   const ct = e.target.closest("[data-ctab]"); if (ct){ chartTab = ct.dataset.ctab; save("tab", chartTab); renderDetail(); }
