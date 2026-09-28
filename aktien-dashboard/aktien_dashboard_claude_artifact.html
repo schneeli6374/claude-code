@@ -219,6 +219,74 @@ tr.cur-h td{background:var(--accent-soft)}
 @media (max-width:760px){.portrait{grid-template-columns:minmax(0,1fr)}.p-art{max-width:320px}}
 .dtitle{display:flex;gap:12px;align-items:center}
 footer.foot{color:var(--muted);font-size:12px;padding-block:28px 36px;text-align:center}
+/* ================= Bewegung ================= */
+body{background:radial-gradient(1100px 420px at 8% -8%,var(--accent-soft),transparent 60%),radial-gradient(900px 380px at 100% 0%,var(--up-soft),transparent 55%),var(--bg);background-attachment:fixed}
+@keyframes rise{from{opacity:0;transform:translateY(16px) scale(.97)}to{opacity:1;transform:none}}
+@keyframes fadein{from{opacity:.35}to{opacity:1}}
+@keyframes slideIn{from{opacity:0;transform:translateX(26px)}to{opacity:1;transform:none}}
+@keyframes wipe{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes draw{from{stroke-dashoffset:420}to{stroke-dashoffset:0}}
+@keyframes fill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes drift{0%{transform:translate(0,0) rotate(0)}100%{transform:translate(6%,-8%) rotate(18deg)}}
+@keyframes ping{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--up) 55%,transparent)}80%,100%{box-shadow:0 0 0 7px transparent}}
+@keyframes glowUp{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--up) 22%,transparent)}}
+@keyframes glowDown{0%,100%{box-shadow:0 0 0 0 transparent}50%{box-shadow:0 0 0 5px color-mix(in srgb,var(--down) 22%,transparent)}}
+@keyframes bumpUp{0%{transform:translateY(7px);color:var(--up)}60%{color:var(--up)}100%{transform:none}}
+@keyframes bumpDown{0%{transform:translateY(-7px);color:var(--down)}60%{color:var(--down)}100%{transform:none}}
+@keyframes shimmer{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
+@keyframes marquee{to{transform:translateX(-50%)}}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+.enter{animation:rise .6s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--i,0) * 55ms)}
+.fadein{animation:fadein .6s ease both}
+.card{transition:transform .28s cubic-bezier(.2,.8,.2,1),box-shadow .28s,border-color .28s}
+.card:not(.pending):not(.err):hover{transform:translateY(-4px);border-color:color-mix(in srgb,var(--co,var(--accent)) 55%,var(--line));box-shadow:0 14px 30px -14px color-mix(in srgb,var(--co,var(--accent)) 60%,transparent),var(--shadow)}
+.card:not(.pending):not(.err):active{transform:translateY(-1px) scale(.99)}
+.avatar{transition:transform .35s cubic-bezier(.3,1.6,.5,1)}
+.card:hover .avatar,.tile[data-open]:hover .avatar{transform:rotate(-7deg) scale(1.1)}
+.tile[data-open]{transition:transform .25s cubic-bezier(.2,.8,.2,1),border-color .25s}
+.tile[data-open]:hover{transform:translateY(-3px);border-color:var(--accent)}
+.spark.wipe,.chart.wipe{animation:wipe 1s cubic-bezier(.4,0,.2,1) both;animation-delay:calc(var(--i,0) * 55ms + 150ms)}
+.px{display:inline-block}.bump-up{animation:bumpUp .7s cubic-bezier(.2,.8,.2,1)}.bump-down{animation:bumpDown .7s cubic-bezier(.2,.8,.2,1)}
+.dot:not(.paused):not(.err){animation:ping 2s ease-out infinite}
+.p-sb{animation:glowUp 2.6s ease-in-out infinite}.p-ss{animation:glowDown 2.6s ease-in-out infinite}
+.btn{transition:transform .15s,filter .2s,background .2s}.btn:hover{filter:brightness(1.08)}.btn:active{transform:scale(.96)}
+.card.pending .wait{position:relative;overflow:hidden;border-radius:8px;background:var(--surface2);padding:10px 12px}
+.card.pending .wait::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--surface) 70%,transparent),transparent);animation:shimmer 1.4s infinite}
+/* Begrüßung */
+.welcome{isolation:isolate}
+.welcome[hidden]{display:none}
+.welcome::before{content:"";position:absolute;inset:-45%;z-index:-1;pointer-events:none;
+  background:radial-gradient(circle at 25% 35%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 38%),radial-gradient(circle at 78% 68%,color-mix(in srgb,var(--up) 16%,transparent),transparent 42%);
+  animation:drift 14s ease-in-out infinite alternate}
+.w-art svg .bar{transform-box:fill-box;transform-origin:bottom;animation:grow .9s cubic-bezier(.2,.8,.2,1) both;animation-delay:calc(var(--d) * 80ms)}
+.w-art svg .line{stroke-dasharray:420;animation:draw 1.8s .5s cubic-bezier(.4,0,.2,1) both}
+.w-art svg .tip{animation:floaty 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.w-av .avatar{animation:rise .5s both;animation-delay:calc(var(--i,0) * 70ms + 300ms)}
+/* Laufband */
+.ticker{overflow:hidden;border-top:1px solid var(--line);-webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
+.ticker[hidden]{display:none}
+.track{display:flex;width:max-content;padding-block:6px;animation:marquee var(--dur,45s) linear infinite}
+.ticker:hover .track,.ticker:focus-within .track,.ticker.hold .track{animation-play-state:paused}
+.ti{display:inline-flex;align-items:center;gap:7px;padding:0 30px 0 0;font-size:12.5px;cursor:pointer;white-space:nowrap;background:none;border:0;color:var(--text)}
+.ti .avatar{border-radius:6px}.ti b{font:600 12.5px var(--cond);letter-spacing:.03em}
+.ti .tp{font-weight:500;display:inline-block}.ti .tp.tick-up{animation:bumpUp .7s}.ti .tp.tick-down{animation:bumpDown .7s}
+/* Detail */
+#detail.anim-in{animation:slideIn .5s cubic-bezier(.2,.8,.2,1) both}
+#overview.anim-in{animation:fadein .45s ease both}
+.fresh .sbar i{transform-origin:left;animation:fill 1s .25s cubic-bezier(.2,.8,.2,1) both}
+.fresh .rbar .rng{transform-origin:left;animation:fill .9s cubic-bezier(.2,.8,.2,1) both}
+.fresh .portrait,.fresh .hero{animation:rise .6s cubic-bezier(.2,.8,.2,1) both}.fresh .hero{animation-delay:.08s}
+.fresh .p-art{animation:rise .8s .15s cubic-bezier(.2,.8,.2,1) both}
+.tabbody.tab-in{animation:rise .4s cubic-bezier(.2,.8,.2,1) both}
+.tabs{position:relative}.tab.on{border-bottom-color:transparent}
+.tab-ind{position:absolute;left:0;bottom:-1px;height:2px;width:0;background:var(--accent);border-radius:2px;transition:transform .4s cubic-bezier(.2,.8,.2,1),width .4s cubic-bezier(.2,.8,.2,1)}
+.chips{position:relative}.chip{position:relative;z-index:1;transition:color .25s,background .25s}#hzChips .chip.on{background:transparent}
+.chip-ind{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:6px;background:var(--accent);transition:transform .38s cubic-bezier(.2,.8,.2,1),width .38s cubic-bezier(.2,.8,.2,1),opacity .2s;z-index:0}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+  .ticker{overflow-x:auto;-webkit-mask-image:none;mask-image:none}
+}
 </style>
 <div id="jsErr" class="banner" style="display:none;margin:12px 16px"></div>
 <script>
@@ -237,7 +305,8 @@ footer.foot{color:var(--muted);font-size:12px;padding-block:28px 36px;text-align
   </div>
   <div class="status"><span class="dot" id="dot"></span><span id="stat">verbinde …</span>
     <button class="btn ghost" id="nowBtn" type="button">Aktualisieren</button></div>
-</div></header>
+</div>
+  <div class="ticker" id="ticker" hidden aria-label="Kursleiste, antippen zum Öffnen"><div class="track" id="tickTrack"></div></div></header>
 <div class="wrap controls">
   <form id="addForm" class="add">
     <input id="symIn" type="text" placeholder="Symbol, z. B. NFLX, ETH/USD" autocomplete="off" aria-label="Symbol hinzufügen">
@@ -269,7 +338,7 @@ footer.foot{color:var(--muted);font-size:12px;padding-block:28px 36px;text-align
   <div id="banner" class="banner" hidden><span id="bannerText"></span>
     <button class="btn" id="bannerDemo" type="button" hidden>Simulierte Kurse anzeigen</button></div>
   <section id="overview">
-    <div class="welcome" id="welcome"></div>
+    <div class="welcome" id="welcome"><div class="w-text" id="wText"></div><div class="w-art" id="wArt"></div></div>
     <div class="summary" id="summary"></div>
     <div class="grid" id="grid"><div class="startup" id="startup">Das Dashboard startet …</div></div>
   </section>
@@ -841,8 +910,8 @@ const ART = {
     ${[[40, 30, 5], [200, 25, 7], [175, 45, 4], [60, 50, 3]].map(([x, y, r]) => `<path d="M${x} ${y - r * 2}l${r * 0.6} ${r * 1.4} ${r * 1.4} ${r * 0.6}-${r * 1.4} ${r * 0.6}-${r * 0.6} ${r * 1.4}-${r * 0.6}-${r * 1.4}-${r * 1.4}-${r * 0.6} ${r * 1.4}-${r * 0.6}z" fill="currentColor" opacity=".6"/>`).join("")}`,
   bank: `<path d="M120 15l85 38H35z" fill="currentColor"/><rect x="40" y="57" width="160" height="8" fill="currentColor" opacity=".7"/>
     ${[55, 85, 115, 145, 175].map(x => `<rect x="${x}" y="70" width="12" height="50" rx="2" fill="currentColor" opacity=".6"/>`).join("")}<rect x="32" y="122" width="176" height="12" rx="2" fill="currentColor"/>`,
-  market: `${[[20, 60], [45, 85], [70, 50], [95, 100], [120, 75], [145, 115], [170, 90], [195, 130]].map(([x, h], i) => `<rect x="${x}" y="${145 - h}" width="18" height="${h}" rx="3" fill="currentColor" opacity="${0.25 + (i % 3) * 0.15}"/>`).join("")}
-    <path d="M10 110L50 95L80 105L115 70L150 78L185 40L225 22" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="225" cy="22" r="7" fill="currentColor"/>`,
+  market: `${[[20, 60], [45, 85], [70, 50], [95, 100], [120, 75], [145, 115], [170, 90], [195, 130]].map(([x, h], i) => `<rect class="bar" style="--d:${i}" x="${x}" y="${145 - h}" width="18" height="${h}" rx="3" fill="currentColor" opacity="${0.25 + (i % 3) * 0.15}"/>`).join("")}
+    <path class="line" d="M10 110L50 95L80 105L115 70L150 78L185 40L225 22" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle class="tip" cx="225" cy="22" r="7" fill="currentColor"/>`,
   generic: `${[[40, 70, 95, 1], [65, 55, 85, 0], [90, 60, 100, 1], [115, 40, 80, 1], [140, 50, 75, 0], [165, 30, 65, 1], [190, 20, 55, 1]].map(([x, top, bot, u]) => `<path d="M${x + 6} ${top - 10}v${bot - top + 20}" stroke="currentColor" stroke-width="2"/><rect x="${x}" y="${top}" width="12" height="${bot - top}" rx="2" fill="currentColor" opacity="${u ? 0.9 : 0.4}"/>`).join("")}`,
 };
 const artSVG = (key, color, cls = "art") => `<svg class="${cls}" viewBox="0 0 240 150" role="img" aria-hidden="true" style="color:${color}"><rect width="240" height="150" rx="14" fill="currentColor" opacity=".1"/>${ART[key] || ART.generic}</svg>`;
@@ -961,18 +1030,21 @@ function whenTxt(d){
 }
 const prioBtn = s => { const v = prioOf(s); return `<button class="rm pb p${v}" type="button" data-prio="${esc(s)}" aria-label="Priorität von ${esc(s)}: ${PRIO[v].name}" title="Priorität: ${PRIO[v].name} (tippen zum Ändern)">${v === 2 ? "★" : v === 0 ? "▽" : "☆"}</button>`; };
 const rmBtn = s => `<button class="rm" type="button" data-rm="${esc(s)}" aria-label="${esc(s)} entfernen" title="Entfernen">×</button>`;
-function cardHTML(s){
+function cardHTML(s, idx = 0){
   const d = data[s];
-  if (!d) return `<div class="card pending" data-s="${esc(s)}"><div class="c-head"><div class="c-idw">${avatarHTML(s)}<div class="c-id"><div class="sym">${esc(s)}</div><div class="nm">${esc(coShort(s))}</div></div></div>${rmBtn(s)}</div><div class="wait">wartet auf Kursdaten …</div></div>`;
-  if (d.error) return `<div class="card err" data-s="${esc(s)}"><div class="c-head"><div class="c-idw">${avatarHTML(s)}<div class="c-id"><div class="sym">${esc(s)}</div></div></div>${rmBtn(s)}</div><div class="errtxt">${esc(d.error)}</div></div>`;
+  const isNew = !seenCards.has(s), justReady = pendingBefore.has(s) && d && !d.error;
+  const anim = isNew ? "enter" : justReady ? "fadein" : "", iv = `--i:${Math.min(idx, 12)}`;
+  if (!d) return `<div class="card pending ${anim}" style="${iv}" data-s="${esc(s)}"><div class="c-head"><div class="c-idw">${avatarHTML(s)}<div class="c-id"><div class="sym">${esc(s)}</div><div class="nm">${esc(coShort(s))}</div></div></div>${rmBtn(s)}</div><div class="wait">wartet auf Kursdaten …</div></div>`;
+  if (d.error) return `<div class="card err ${anim}" style="${iv}" data-s="${esc(s)}"><div class="c-head"><div class="c-idw">${avatarHTML(s)}<div class="c-id"><div class="sym">${esc(s)}</div></div></div>${rmBtn(s)}</div><div class="errtxt">${esc(d.error)}</div></div>`;
   const f = fcFor(s);
   let flash = "";
   if (lastPrice[s] != null && lastPrice[s] !== d.price) flash = d.price > lastPrice[s] ? "flash-up" : "flash-down";
   lastPrice[s] = d.price;
-  return `<div class="card ${flash}" role="button" tabindex="0" data-s="${esc(s)}" aria-label="${esc(d.name)}: Details öffnen">
+  const bump = flash === "flash-up" ? "bump-up" : flash === "flash-down" ? "bump-down" : "";
+  return `<div class="card ${flash} ${anim}" role="button" tabindex="0" data-s="${esc(s)}" data-new="${isNew || justReady ? 1 : 0}" aria-label="${esc(d.name)}: Details öffnen" style="--co:${coColor(s)};${iv}">
     <div class="c-head"><div class="c-idw">${avatarHTML(s)}<div class="c-id"><div class="sym">${esc(coName(s, d))} <span class="muted" style="font-weight:500;font-size:12px">${esc(s)}</span></div><div class="nm" title="${esc(d.name)}">${esc(coShort(s, d))}</div></div></div>
       <div class="c-right"><span class="pill ${pillCls(tipLabel(f))}">${esc(tipLabel(f))}</span>${prioBtn(s)}${rmBtn(s)}</div></div>
-    <div class="c-price"><span class="px num">${nf(d.price)}</span><span class="cur">${esc(d.currency)}</span><span class="chg num ${d.change >= 0 ? "up" : "down"}">${sp(d.changePct / 100, 2)}</span></div>
+    <div class="c-price"><span class="px num ${bump}">${nf(d.price)}</span><span class="cur">${esc(d.currency)}</span><span class="chg num ${d.change >= 0 ? "up" : "down"}">${sp(d.changePct / 100, 2)}</span></div>
     <canvas class="spark" data-spark="${esc(s)}" aria-hidden="true"></canvas>
     <div class="fc"><span>Prognose ${esc(hzLabel(hz))}</span>${f ? `<span><b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b> <span class="muted">· Anstieg ${pc(f.pUp)}</span></span>` : `<span class="muted">${esc(intraMsg(s))}</span>`}</div>
     <div class="meta"><span>${!f ? "" : f.tip ? `Treffer-Wahrscheinlichkeit ${pc(f.pDir)} (mind. ${pc(f.lb)})` : `zu unsicher: ${pc(f.pDir)}, nicht sicher über 50 %`}</span><span>${esc(whenTxt(d))}</span></div>
@@ -980,7 +1052,8 @@ function cardHTML(s){
 }
 function renderSummary(){
   const ds = symbols.filter(ready).map(s => data[s]);
-  if (!ds.length){ $("#summary").innerHTML = ""; $("#welcome").innerHTML = ""; return; }
+  $("#welcome").hidden = !ds.length;
+  if (!ds.length){ $("#summary").innerHTML = ""; return; }
   const tips = ds.map(d => fcFor(d.symbol)), nb = tips.filter(f => f && f.tip && f.dirF > 0).length, ns = tips.filter(f => f && f.tip && f.dirF < 0).length, nn = ds.length - nb - ns;
   const fcs = ds.map(d => [d, fcFor(d.symbol)]).filter(x => x[1]).sort((a, b) => b[1].exp - a[1].exp);
   const bdf = fcs[0], wdf = fcs[fcs.length - 1];
@@ -988,16 +1061,16 @@ function renderSummary(){
     <div class="t-val" style="display:flex;gap:8px;align-items:center">${avatarHTML(d.symbol, 26)}${esc(coName(d.symbol, d))} <b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b></div><div class="t-sub">${esc(d.name)} · Anstieg ${pc(f.pUp)}</div></div>`;
   const tipSyms = ds.filter(d => { const f = fcFor(d.symbol); return f && f.tip; }).map(d => d.symbol);
   const now = new Date(), hour = now.getHours(), greet = hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
-  $("#welcome").innerHTML = `<div class="w-text"><div class="eyebrow">${esc(now.toLocaleDateString("de-DE", {weekday: "long", day: "numeric", month: "long"}))}</div>
+  setHTML($("#wText"), `<div class="eyebrow">${esc(now.toLocaleDateString("de-DE", {weekday: "long", day: "numeric", month: "long"}))}</div>
       <h2>${greet}! Dein Marktüberblick</h2>
       <p>${tipSyms.length ? `Für ${esc(hzLabel(hz))} gibt es ${tipSyms.length === 1 ? "einen verlässlichen Tipp" : tipSyms.length + " verlässliche Tipps"}. Alle anderen Werte sind gerade nicht sicher genug bestimmbar.` : `Für ${esc(hzLabel(hz))} lässt sich gerade bei keinem Wert die Richtung sicher genug bestimmen. Probier einen anderen Zeitraum.`}</p>
       <div class="w-count"><span style="background:var(--up-soft);color:var(--up)">${nb} × Kaufen</span><span style="background:var(--down-soft);color:var(--down)">${ns} × Verkaufen</span><span style="background:var(--surface2);color:var(--muted)">${nn} × kein Tipp</span></div>
-      ${tipSyms.length ? `<div class="w-av">${tipSyms.slice(0, 8).map(s => avatarHTML(s, 30)).join("")}</div>` : ""}</div>
-    ${artSVG("market", "var(--accent)")}`;
-  $("#summary").innerHTML = `
+      ${tipSyms.length ? `<div class="w-av">${tipSyms.slice(0, 8).map((s, k) => avatarHTML(s, 30).replace('class="avatar', `data-k="${k}" class="avatar`)).join("")}</div>` : ""}`);
+  $("#wText").querySelectorAll(".w-av .avatar").forEach(a => a.style.setProperty("--i", a.dataset.k));
+  setHTML($("#summary"), `
     ${bdf ? t("Beste Prognose", bdf[0], bdf[1]) : `<div class="tile"><div class="eyebrow">Prognose · ${esc(hzLabel(hz))}</div><div class="t-val muted">lädt Stundenkerzen …</div></div>`}${fcs.length > 1 ? t("Schwächste Prognose", wdf[0], wdf[1]) : ""}
     <div class="tile"><div class="eyebrow">${mode === "demo" ? "Datenquelle" : "Twelve Data heute"}</div>
-      <div class="t-val num">${mode === "demo" ? "Simulation" : usedToday() + " / " + DAY_LIMIT}</div><div class="t-sub">${mode === "demo" ? "keine echten Kurse" : "Abfragen verbraucht"}</div></div>`;
+      <div class="t-val num">${mode === "demo" ? "Simulation" : usedToday() + " / " + DAY_LIMIT}</div><div class="t-sub">${mode === "demo" ? "keine echten Kurse" : "Abfragen verbraucht"}</div></div>`);
 }
 function renderOverview(){
   let list = symbols.slice();
@@ -1009,21 +1082,80 @@ function renderOverview(){
   if (sortBy === "fc") list.sort((a, b) => fcv(b) - fcv(a));
   list.sort((a, b) => prioOf(b) - prioOf(a));   // stabil: Priorität zuerst, innerhalb davon die gewählte Sortierung
   renderSummary();
-  $("#grid").innerHTML = list.map(cardHTML).join("");
+  $("#grid").innerHTML = list.map((s, k) => cardHTML(s, k)).join("");
+  pendingBefore.clear();
+  list.forEach(s => { seenCards.add(s); if (!ready(s)) pendingBefore.add(s); });
+  renderTicker();
   document.querySelectorAll("canvas[data-spark]").forEach(cv => {
     const s = cv.dataset.spark, d = data[s]; if (!ready(s)) return;
+    const card = cv.closest(".card"); if (card && card.dataset.new === "1") cv.classList.add("wipe");
     const ia = hz.u === "h" && intra[s] ? intra[s].analysis : null, src = ia || d;
     const c = src.chart.c.slice(-60), f = fcFor(s), p = src.price;
     drawChart(cv, {n: c.length, series: [{v: c, color: c[c.length - 1] >= c[0] ? "--up" : "--down", w: 1.6, fill: true}],
       cone: f ? {slots: 16, p0: p, lo: p * (1 + f.lo), hi: p * (1 + f.hi), mid: p * (1 + f.exp)} : null, extra: f ? 0 : 16, pad: [4, 4, 4, 2], noAxis: true});
   });
 }
+// ---------------------------------------------------------------------
+// Animationen: nur beim ersten Erscheinen, nicht bei jeder Aktualisierung
+// ---------------------------------------------------------------------
+const seenCards = new Set(), pendingBefore = new Set();
+let enterDetail = false, tabAnim = false, lastTab = null;
+const reduceMotion = () => { try{ return matchMedia("(prefers-reduced-motion: reduce)").matches; }catch(e){ return false; } };
+function setHTML(el, html){ if (el._h !== html){ el.innerHTML = html; el._h = html; } }
+function replay(el, cls){ if (!el || reduceMotion()) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+const CFMT = {pc: v => pc(v), sp1: v => sp(v, 1), sp2: v => sp(v, 2)};
+function countUp(el){
+  const to = +el.dataset.count, f = CFMT[el.dataset.f] || (v => String(v));
+  if (!isFinite(to) || reduceMotion()) return;
+  const t0 = performance.now(), dur = 900;
+  const step = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = f(to * e); if (k < 1) requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+function afterDetail(){
+  const el = $("#detail");
+  if (enterDetail){
+    replay(el, "anim-in"); el.classList.add("fresh"); clearTimeout(el._ft); el._ft = setTimeout(() => el.classList.remove("fresh"), 1600);
+    el.querySelectorAll("[data-count]").forEach(countUp);
+  }
+  const ind = el.querySelector(".tab-ind"), on = el.querySelector(".tab.on");
+  if (ind && on){
+    const x = on.offsetLeft, w = on.offsetWidth;
+    if (lastTab && (lastTab.x !== x || lastTab.w !== w) && !reduceMotion()){
+      ind.style.transition = "none"; ind.style.transform = `translateX(${lastTab.x}px)`; ind.style.width = lastTab.w + "px"; void ind.offsetWidth;
+      ind.style.transition = ""; ind.style.transform = `translateX(${x}px)`; ind.style.width = w + "px";
+    } else { ind.style.transform = `translateX(${x}px)`; ind.style.width = w + "px"; }
+    lastTab = {x, w};
+  }
+}
+// Laufband mit allen Kursen: wird nur neu aufgebaut, wenn sich die Liste ändert
+function renderTicker(){
+  const box = $("#ticker"), tr = $("#tickTrack"), list = symbols.filter(ready);
+  box.hidden = list.length < 2;
+  if (box.hidden) return;
+  const sig = list.join(",");
+  if (tr._sig !== sig){
+    const item = s => `<button type="button" class="ti" data-t="${esc(s)}" tabindex="-1">${avatarHTML(s, 18)}<b>${esc(s)}</b><span class="tp num"></span><span class="tc num"></span></button>`;
+    tr.innerHTML = list.map(item).join("") + list.map(item).join("");
+    tr._sig = sig; tr.style.setProperty("--dur", Math.max(24, list.length * 6) + "s");
+  }
+  tr.querySelectorAll(".ti").forEach(el => {
+    const d = data[el.dataset.t]; if (!d) return;
+    const tp = el.querySelector(".tp"), tc = el.querySelector(".tc");
+    if (el._p != null && el._p !== d.price) replay(tp, d.price > el._p ? "tick-up" : "tick-down");
+    el._p = d.price; tp.textContent = nf(d.price);
+    tc.textContent = sp(d.changePct / 100, 2); tc.className = "tc num " + (d.change >= 0 ? "up" : "down");
+  });
+}
+$("#tickTrack").addEventListener("click", e => { const t = e.target.closest("[data-t]"); if (t) openSym(t.dataset.t); });
+$("#ticker").addEventListener("touchstart", () => { $("#ticker").classList.add("hold"); clearTimeout(window._th); window._th = setTimeout(() => $("#ticker").classList.remove("hold"), 4000); }, {passive: true});
+$("#wArt").innerHTML = artSVG("market", "var(--accent)");
+
 function render(){
   updateNote(); updateBanner(); updateStatus();
   const showDetail = selected && ready(selected);
   $("#overview").hidden = !!showDetail;
   $("#detail").hidden = !showDetail;
-  if (showDetail) renderDetail(); else renderOverview();
+  if (showDetail){ renderDetail(); renderTicker(); } else renderOverview();
 }
 
 // ---------------------------------------------------------------------
@@ -1152,7 +1284,7 @@ function renderDetail(){
         <div class="h-title">${!f0 ? "Tipp wird berechnet …" : !f0.tip ? "Kein klarer Tipp" : f0.dirF > 0 ? "Kaufen ist besser" : "Verkaufen ist besser"}</div>
         <span class="pill ${pillCls(tipLabel(f0))}">${esc(tipLabel(f0))}</span>
         ${f0 ? `<div class="h-stats">
-          <div><span class="eyebrow">Wahrscheinlichkeit ${f0.dirF > 0 ? "Anstieg" : "Rückgang"}</span><b>${pc(f0.pDir)}</b>
+          <div><span class="eyebrow">Wahrscheinlichkeit ${f0.dirF > 0 ? "Anstieg" : "Rückgang"}</span><b data-count="${f0.pDir}" data-f="pc">${pc(f0.pDir)}</b>
             <div class="sbar"><i style="width:${(100 * f0.pDir).toFixed(0)}%;background:${f0.tip ? (f0.dirF > 0 ? "var(--up)" : "var(--down)") : "var(--muted)"}"></i></div>
             <small>vorsichtig geschätzt mindestens ${pc(f0.lb)}</small></div>
           <div><span class="eyebrow">Gezeigte Tipps früher</span><b>${f0.acc && f0.acc.shownHit != null ? pc(f0.acc.shownHit) + " richtig" : "–"}</b>
@@ -1162,9 +1294,9 @@ function renderDetail(){
           : `Die Wahrscheinlichkeit für ${f0.dirF > 0 ? "einen Anstieg" : "einen Rückgang"} liegt bei ${pc(f0.pDir)}, aber nicht sicher über 50 % (vorsichtige Untergrenze ${pc(f0.lb)}). Deshalb gibt es keinen Tipp.`}</div>`}` : ""}
         <div class="fine">Indikatoren allein: ${esc(d.total.label)} (Stärke ${d.total.strength} %)</div></div>
       <div class="h-fc"><div class="eyebrow">Prognose · ${esc(hzLabel(hz))}${ia ? " · aus Stundenkerzen" : ""}</div>
-        ${f0 ? `<div class="big ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, isH ? 2 : 1)}</div>
+        ${f0 ? `<div class="big ${f.exp >= 0 ? "up" : "down"}" data-count="${f.exp}" data-f="${isH ? "sp2" : "sp1"}">${sp(f.exp, isH ? 2 : 1)}</div>
         <div class="row"><span>Kurs ca.</span><b class="num">${nf(cd.price * (1 + f.exp))} ${esc(d.currency)}</b></div>
-        <div class="row"><span>Wahrscheinlichkeit Anstieg</span><b class="num">${pc(f.pUp)}</b></div>
+        <div class="row"><span>Wahrscheinlichkeit Anstieg</span><b class="num" data-count="${f.pUp}" data-f="pc">${pc(f.pUp)}</b></div>
         <div class="row"><span>80 %-Spanne</span><b class="num">${nf(cd.price * (1 + f.lo))} – ${nf(cd.price * (1 + f.hi))}</b></div>
         <div class="row"><span>Richtung früher richtig</span><b class="num">${f.acc ? pc(f.acc.hit) : "–"}</b></div>
         ${ia ? `<div class="row"><span>Kurzfrist-Signal (Stunden)</span><span class="pill ${pillCls(ia.total.label)}">${esc(ia.total.label)}</span></div>` : ""}
@@ -1172,10 +1304,14 @@ function renderDetail(){
         : `<div class="big muted" style="font-size:20px">${esc(intraMsg(selected))}</div><div class="fine">Stundenkerzen kosten eine Twelve-Data-Abfrage je Wert und werden höchstens alle 20 Minuten neu geladen.</div>`}
       </div>
     </div>
-    <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" class="tab ${dTab === k ? "on" : ""}" aria-selected="${dTab === k}" data-dtab="${k}">${l}</button>`).join("")}</div>
-    ${body}`;
+    <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" class="tab ${dTab === k ? "on" : ""}" aria-selected="${dTab === k}" data-dtab="${k}">${l}</button>`).join("")}<span class="tab-ind" aria-hidden="true"></span></div>
+    <div class="tabbody ${tabAnim ? "tab-in" : ""}">${body}</div>`;
+  const wasEnter = enterDetail, wasTab = tabAnim;
+  afterDetail();
+  enterDetail = false; tabAnim = false;
   if (dTab === "overview"){
     const ch = cd.chart, n = ch.c.length, p = cd.price, slots = f0 ? Math.round(n * 0.22) : 0;
+    if (wasEnter || wasTab){ $("#cMain").classList.add("wipe"); $("#cInd").classList.add("wipe"); }
     drawChart($("#cMain"), {n, candles: ch, band: [ch.bbu, ch.bbl],
       series: [{v: ch.sma20, color: "--c-sma20", w: 1}, {v: ch.sma50, color: "--c-sma50", w: 1.5}, {v: ch.sma200, color: "--c-sma200", w: 1.5}],
       lastLine: p, dates: ch.dates, cone: f0 ? {slots, p0: p, lo: p * (1 + f.lo), hi: p * (1 + f.hi), mid: p * (1 + f.exp), label: sp(f.exp, isH ? 2 : 1) + " in " + hzLabel(hz)} : null});
@@ -1191,8 +1327,8 @@ function renderDetail(){
 // ---------------------------------------------------------------------
 // Bedienung
 // ---------------------------------------------------------------------
-function openSym(s){ if (!ready(s)) return; selected = s; save("selected", s); render(); window.scrollTo({top: 0}); }
-function closeDetail(){ selected = null; save("selected", null); render(); }
+function openSym(s){ if (!ready(s)) return; selected = s; save("selected", s); enterDetail = true; lastTab = null; render(); window.scrollTo({top: 0}); }
+function closeDetail(){ selected = null; save("selected", null); render(); replay($("#overview"), "anim-in"); }
 function removeSym(s){
   symbols = symbols.filter(x => x !== s); save("symbols", symbols);
   if (selected === s){ selected = null; save("selected", null); }
@@ -1217,7 +1353,7 @@ $("#detail").addEventListener("click", e => {
   const gp = e.target.closest("[data-genprof]"); if (gp){ generateProfile(gp.dataset.genprof); return; }
   if (e.target.closest("#rmDetail")) return removeSym(selected);
   const sp_ = e.target.closest("[data-setprio]"); if (sp_){ setPrio(selected, +sp_.dataset.setprio); return; }
-  const dt = e.target.closest("[data-dtab]"); if (dt){ dTab = dt.dataset.dtab; save("dtab", dTab); renderDetail(); return; }
+  const dt = e.target.closest("[data-dtab]"); if (dt){ if (dTab !== dt.dataset.dtab) tabAnim = true; dTab = dt.dataset.dtab; save("dtab", dTab); renderDetail(); return; }
   if (e.target.closest("[data-intra]")){ wantIntra.add(selected); if (mode === "demo") demoTick(); else { render(); tick(); } return; }
   const ct = e.target.closest("[data-ctab]"); if (ct){ chartTab = ct.dataset.ctab; save("tab", chartTab); renderDetail(); }
 });
@@ -1244,6 +1380,8 @@ function syncHzUi(fromRange){
   if (!fromRange) $("#hzRange").value = stepIndex(hz);
   $("#hzVal").textContent = hzLabel(hz);
   document.querySelectorAll("#hzChips .chip").forEach(b => b.classList.toggle("on", b.dataset.k === hzKey(hz)));
+  const ind = $("#hzChips .chip-ind"), on = $("#hzChips .chip.on");
+  if (ind){ ind.style.opacity = on ? 1 : 0; if (on){ ind.style.width = on.offsetWidth + "px"; ind.style.transform = `translateX(${on.offsetLeft}px)`; } }
 }
 function setHz(h, fromRange){
   hz = {u: h.u, n: h.n}; save("hz2", hz); syncHzUi(fromRange);
@@ -1251,7 +1389,7 @@ function setHz(h, fromRange){
   if (mode === "live" && hz.u === "h" && !busy) tick();
 }
 $("#hzRange").min = 0; $("#hzRange").max = HZ_STEPS.length - 1;
-$("#hzChips").innerHTML = HZ_CHIPS.map(([l, k]) => `<button type="button" class="chip" data-k="${k}" title="${hzLabel({u: k[0], n: +k.slice(1)})}">${l}</button>`).join("");
+$("#hzChips").innerHTML = '<span class="chip-ind" aria-hidden="true"></span>' + HZ_CHIPS.map(([l, k]) => `<button type="button" class="chip" data-k="${k}" title="${hzLabel({u: k[0], n: +k.slice(1)})}">${l}</button>`).join("");
 $("#hzChips").addEventListener("click", e => { const b = e.target.closest(".chip"); if (b) setHz({u: b.dataset.k[0], n: +b.dataset.k.slice(1)}); });
 let hzRaf = 0;
 $("#hzRange").addEventListener("input", e => { const i = +e.target.value; cancelAnimationFrame(hzRaf); hzRaf = requestAnimationFrame(() => setHz(HZ_STEPS[i], true)); });
