@@ -125,6 +125,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;backgroun
 /* Empfehlungs-Pillen */
 .pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font:600 12.5px/1.3 var(--cond);letter-spacing:.02em;white-space:nowrap}
 .p-sb{background:var(--up);color:var(--on-up)} .p-b{background:var(--up-soft);color:var(--up)} .p-wb{box-shadow:inset 0 0 0 1px var(--up);color:var(--up)}
+.p-none{box-shadow:inset 0 0 0 1px var(--line);color:var(--muted)}
 .p-ss{background:var(--down);color:var(--on-down)} .p-s{background:var(--down-soft);color:var(--down)} .p-ws{box-shadow:inset 0 0 0 1px var(--down);color:var(--down)}
 
 /* Detailseite */
@@ -138,7 +139,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;backgroun
 .hero > div{padding:16px 18px}
 .hero .h-fc{border-left:1px solid var(--line);background:var(--surface2)}
 .h-title{font-size:26px;font-weight:700;letter-spacing:-.015em;margin:4px 0 8px}
-.hero.dir-up .h-title{color:var(--up)} .hero.dir-down .h-title{color:var(--down)}
+.hero.dir-up .h-title{color:var(--up)} .hero.dir-down .h-title{color:var(--down)} .hero.dir-none .h-title{color:var(--muted)}
 .h-stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:12px}
 .h-stats b{display:block;font:600 18px var(--mono)}
 .h-stats small{color:var(--muted);font-size:12px}
@@ -225,7 +226,7 @@ footer.foot{color:var(--muted);font-size:12px;padding-block:28px 36px;text-align
     <select id="sortSel" aria-label="Sortierung">
       <option value="list">Sortierung: Liste</option>
       <option value="fc">Sortierung: Prognose</option>
-      <option value="score">Sortierung: Signalstärke</option>
+      <option value="score">Sortierung: Tipp-Sicherheit</option>
       <option value="chg">Sortierung: Tagesänderung</option>
     </select>
     <select id="everySel" aria-label="Abfragetakt">
@@ -294,7 +295,7 @@ const nf = (x, d=2) => x==null||isNaN(x) ? "–" : x.toLocaleString("de-DE",{min
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const sp = (v, d = 1) => v == null || !isFinite(v) ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "±") + nf(Math.abs(100 * v), d) + " %";
 const pc = (v, d = 0) => v == null || !isFinite(v) ? "–" : nf(100 * v, d) + " %";
-function pillCls(l){ return {"Starker Kauf":"p-sb","Kaufen":"p-b","Eher kaufen":"p-wb","Eher verkaufen":"p-ws","Verkaufen":"p-s","Starker Verkauf":"p-ss"}[l] || "p-wb"; }
+function pillCls(l){ return {"Kein Tipp":"p-none","…":"p-none","Starker Kauf":"p-sb","Kaufen":"p-b","Eher kaufen":"p-wb","Eher verkaufen":"p-ws","Verkaufen":"p-s","Starker Verkauf":"p-ss"}[l] || "p-wb"; }
 function sigTxt(x){
   if (x.info) return '<span class="sig muted">Info</span>';
   const s = x.signal;
@@ -601,51 +602,92 @@ function demoIntraRaw(sym){
 const bucket = s => (s >= 0 ? 1 : -1) * (Math.abs(s) >= 0.35 ? 3 : Math.abs(s) >= 0.12 ? 2 : 1);
 function quant(a, p){ const s = a.slice().sort((x, y) => x - y), i = (s.length - 1) * p, lo = Math.floor(i), hi = Math.ceil(i); return s[lo] + (s[hi] - s[lo]) * (i - lo); }
 const mean = a => a.reduce((x, y) => x + y, 0) / a.length;
+// ---------------------------------------------------------------------
+// Schätzung: Wie wahrscheinlich steigt der Kurs? Und ist das sicher genug für einen Tipp?
+// Gleiche Rechnung für heute und für den Rückblick-Test.
+// ---------------------------------------------------------------------
+const TIP_Z = 1.64;   // vorsichtige Untergrenze (einseitig 95 %)
+function wilsonLB(p, n, z = TIP_Z){
+  if (!(n > 0)) return 0;
+  const z2 = z * z;
+  return (p + z2 / (2 * n) - z * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))) / (1 + z2 / n);
+}
+// stAll/stSim: {n, up} bekannte Fälle (alle Zeitpunkte / ähnliche Zeitpunkte)
+function estimate(stAll, stSim, H){
+  const effAll = stAll.n / H, effSim = stSim.n / H;
+  const wA = stAll.n >= 40 ? effAll / (effAll + 10) : 0;          // Vertrauen in die eigene Kursgeschichte
+  const wS = stSim.n >= 30 ? effSim / (effSim + 15) : 0;          // Vertrauen in ähnliche Situationen
+  const pAll = stAll.n ? stAll.up / stAll.n : 0.5;
+  const pEmp = wS * (stSim.n ? stSim.up / stSim.n : 0) + (1 - wS) * pAll;
+  const pUp = wA * pEmp + (1 - wA) * 0.5;
+  // Überlappende Zeiträume sind nicht unabhängig: effektive Fallzahl ≈ 1,5 × Fälle / Zeitraum
+  const nEff = 1.5 * (wS * stSim.n + (1 - wS) * stAll.n) / H;
+  const pDir = Math.max(pUp, 1 - pUp), lb = wilsonLB(pDir, nEff);
+  return {pUp, pDir, dirF: pUp >= 0.5 ? 1 : -1, lb, nEff, pAll, wA, wS, tip: stAll.n >= 40 && lb > 0.5};
+}
+// Ähnliche Situation = gleiche Signalstufe und gleicher langfristiger Trend (über/unter SMA 200);
+// gibt es davon zu wenige, zählt nur die Signalstufe.
+const simKey = (s, tr) => bucket(s) + "|" + tr;
+function tipLabel(f){
+  if (!f) return "…";
+  if (!f.tip) return "Kein Tipp";
+  return f.dirF > 0 ? (f.pDir >= 0.65 ? "Starker Kauf" : "Kaufen") : (f.pDir >= 0.65 ? "Starker Verkauf" : "Verkaufen");
+}
+
 // Tages-Zeitraum (Handelstage) -> Anzahl Kerzen; Krypto handelt auch am Wochenende
 function forecast(d, HT){ return forecastBars(d, d.crypto ? Math.round(HT * 365 / 252) : HT); }
 function forecastBars(d, H){
   d._fc = d._fc || {};
   if (d._fc[H]) return d._fc[H];
-  const F = d.F, c = F.c, n = c.length, sc = F.score, sd = F.sd;
+  const F = d.F, c = F.c, n = c.length, sc = F.score, sd = F.sd, tr = F.trend;
   const sdNow = sd[n - 1] || 0.02;
-  const cur = sc[n - 1] != null ? sc[n - 1] : 0, b0 = d.total.dir * Math.abs(bucket(cur || 1e-9));
-  const all = [], sim = [];
+  const cur = sc[n - 1] != null ? sc[n - 1] : 0, b0 = d.total.dir * Math.abs(bucket(cur || 1e-9)), k0 = b0 + "|" + tr[n - 1];
+  const all = [], simB = [], simK = [];
   for (let i = Math.max(F.start, 0); F.start >= 0 && i + H < n; i++){
     if (sc[i] == null || !sd[i]) continue;
     const ratio = Math.max(0.5, Math.min(2, sdNow / sd[i]));      // an heutige Schwankung anpassen
     const x = Math.exp(Math.log(c[i + H] / c[i]) * ratio) - 1;
-    all.push(x); if (bucket(sc[i]) === b0) sim.push(x);
+    all.push(x);
+    if (bucket(sc[i]) === b0){ simB.push(x); if (simKey(sc[i], tr[i]) === k0) simK.push(x); }
   }
-  // Überlappende Zeiträume sind nicht unabhängig: effektive Anzahl ≈ Fälle / Zeitraum
-  const effAll = all.length / H, effSim = sim.length / H;
-  const wA = all.length >= 40 ? effAll / (effAll + 10) : 0;       // Vertrauen in die eigene Kursgeschichte (sonst: kein Trend)
-  const wS = sim.length >= 30 ? effSim / (effSim + 15) : 0;       // Vertrauen in ähnliche Signale (sonst: alle Tage)
-  const pu = a => a.filter(x => x > 0).length / a.length;
-  const emp = (fn, dflt) => all.length ? wS * (wS ? fn(sim) : 0) + (1 - wS) * fn(all) : dflt;
-  const exp = wA * emp(mean, 0);
+  const sim = simK.length >= 40 ? simK : simB;
+  const cnt = a => ({n: a.length, up: a.filter(x => x > 0).length});
+  const E = estimate(cnt(all), cnt(sim), H);
+  const emp = (fn, dflt) => all.length ? E.wS * (E.wS ? fn(sim) : 0) + (1 - E.wS) * fn(all) : dflt;
+  const exp = E.wA * emp(mean, 0);
   const band = z => Math.exp(Math.log(1 + exp) + z * sdNow * Math.sqrt(H)) - 1;  // normale Schwankung um die Erwartung
-  const res = {H, n: all.length, nSim: sim.length, w: wS, wA, exp,
-    pUp: wA * emp(pu, 0.5) + (1 - wA) * 0.5,
-    lo: Math.min(exp, wA * emp(a => quant(a, 0.1), 0) + (1 - wA) * band(-1.2816)),
-    hi: Math.max(exp, wA * emp(a => quant(a, 0.9), 0) + (1 - wA) * band(1.2816)),
-    few: effAll < 12, acc: all.length >= 40 ? fcAccuracy(F, H) : null};
+  const res = {H, n: all.length, nSim: sim.length, trendUsed: sim === simK, exp, ...E,
+    lo: Math.min(exp, E.wA * emp(a => quant(a, 0.1), 0) + (1 - E.wA) * band(-1.2816)),
+    hi: Math.max(exp, E.wA * emp(a => quant(a, 0.9), 0) + (1 - E.wA) * band(1.2816)),
+    few: all.length / H < 12, acc: all.length >= 40 ? fcAccuracy(F, H) : null};
+  // Zweite Hürde: Die Regel muss sich bei diesem Wert bewährt haben (gezeigte Tipps sicher über 50 % richtig)
+  res.provenLB = res.acc && res.acc.shownHit != null ? wilsonLB(res.acc.shownHit, 1.5 * res.acc.shownN / H) : null;
+  res.tipToday = res.tip;
+  res.tip = res.tip && res.provenLB != null && res.provenLB > 0.5;
   d._fc[H] = res;
   return res;
 }
-// Rückblick: Wie oft lag die Prognose-Richtung früher richtig? (nur mit damals bekannten Daten)
+// Rückblick-Test Schritt für Schritt, nur mit damals bekannten Daten:
+// Wie oft stimmte die Richtung? Und wie oft stimmten die Tipps, die die Seite damals angezeigt hätte?
 function fcAccuracy(F, H){
-  const c = F.c, sc = F.score, n = c.length, st = {};
-  let aN = 0, aSum = 0, hits = 0, tot = 0, ups = 0;
+  const c = F.c, sc = F.score, tr = F.trend, n = c.length, stB = {}, stK = {}, all = {n: 0, up: 0};
+  let tot = 0, hits = 0, ups = 0, shownN = 0, shownHit = 0;
+  const add = (m, k, up) => { const e = m[k] = m[k] || {n: 0, up: 0}; e.n++; if (up) e.up++; };
   for (let i = F.start; i + H < n; i++){
     const j = i - H;
-    if (j >= F.start && sc[j] != null){ const r = c[i] / c[j] - 1, e = st[bucket(sc[j])] = st[bucket(sc[j])] || [0, 0]; e[0]++; e[1] += r; aN++; aSum += r; }
-    if (sc[i] == null || aN < 60) continue;
-    const e = st[bucket(sc[i])] || [0, 0], eff = e[0] / H, w = e[0] >= 30 ? eff / (eff + 15) : 0;
-    const pred = w * (e[0] ? e[1] / e[0] : 0) + (1 - w) * aSum / aN, act = c[i + H] / c[i] - 1;
-    if (!pred || !act) continue;
-    tot++; if (Math.sign(pred) === Math.sign(act)) hits++; if (act > 0) ups++;
+    if (j >= F.start && sc[j] != null){ const up = c[i] > c[j]; add(stB, bucket(sc[j]), up); add(stK, simKey(sc[j], tr[j]), up); all.n++; if (up) all.up++; }
+    if (sc[i] == null || all.n < 60) continue;
+    const eK = stK[simKey(sc[i], tr[i])], E = estimate(all, eK && eK.n >= 40 ? eK : (stB[bucket(sc[i])] || {n: 0, up: 0}), H);
+    const act = c[i + H] / c[i] - 1;
+    if (!act) continue;
+    const ok = sgn(act) === E.dirF;
+    tot++; if (ok) hits++; if (act > 0) ups++;
+    if (E.tip){ shownN++; if (ok) shownHit++; }
   }
-  return tot / H >= 8 && tot >= 30 ? {hit: hits / tot, base: Math.max(ups / tot, 1 - ups / tot), n: tot} : null;
+  if (!(tot / H >= 8 && tot >= 30)) return null;
+  const shownOk = shownN >= 20 && shownN / H >= 4;
+  return {hit: hits / tot, base: Math.max(ups / tot, 1 - ups / tot), n: tot,
+          shownN, shownHit: shownOk ? shownHit / shownN : null, coverage: shownN / tot};
 }
 
 // ---------------------------------------------------------------------
@@ -655,7 +697,7 @@ function updateNote(){
   if (mode === "demo") return;
   $("#note").innerHTML = `<b>Echte Kurse von Twelve Data.</b> Alle ${everySec} s wird reihum ein Wert aktualisiert · heute <b class="num">${usedToday()}</b> von ${DAY_LIMIT} Abfragen genutzt ·
     <details><summary>So funktioniert es</summary><span class="more">Dein kostenloser Tarif erlaubt 800 Abfragen pro Tag und 8 pro Minute. Deshalb wird reihum ein Wert aktualisiert, jeder höchstens einmal pro Minute,
-    bei geschlossener Börse nur alle 15 Minuten. Die Kurshistorie (etwa 4 Jahre) wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten, SAP gibt es aber über die Börse New York. Mit dem Stern auf jeder Karte legst du die Priorität fest: ★ Hoch = oben und etwa 3× so oft aktualisiert, ☆ Normal, ▽ Niedrig = unten und selten aktualisiert (spart Abfragen). Für Stunden-Prognosen werden zusätzlich Stundenkerzen geladen: 1 Abfrage je Wert, höchstens alle 20 Minuten und nur, wenn ein Stunden-Zeitraum gewählt ist.</span></details>`;
+    bei geschlossener Börse nur alle 15 Minuten. Die Kurshistorie (etwa 4 Jahre) wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten, SAP gibt es aber über die Börse New York. Tipps erscheinen nur, wenn die Wahrscheinlichkeit richtig zu liegen auch vorsichtig geschätzt über 50 % liegt und sich diese Regel beim jeweiligen Wert früher nachweislich bewährt hat, sonst steht dort „Kein Tipp“. Mit dem Stern auf jeder Karte legst du die Priorität fest: ★ Hoch = oben und etwa 3× so oft aktualisiert, ☆ Normal, ▽ Niedrig = unten und selten aktualisiert (spart Abfragen). Für Stunden-Prognosen werden zusätzlich Stundenkerzen geladen: 1 Abfrage je Wert, höchstens alle 20 Minuten und nur, wenn ein Stunden-Zeitraum gewählt ist.</span></details>`;
 }
 function updateBanner(){
   let txt = "", demoBtn = false;
@@ -715,25 +757,25 @@ function cardHTML(s){
   lastPrice[s] = d.price;
   return `<div class="card ${flash}" role="button" tabindex="0" data-s="${esc(s)}" aria-label="${esc(d.name)}: Details öffnen">
     <div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div></div>
-      <div class="c-right"><span class="pill ${pillCls(d.total.label)}">${esc(d.total.label)}</span>${prioBtn(s)}${rmBtn(s)}</div></div>
+      <div class="c-right"><span class="pill ${pillCls(tipLabel(f))}">${esc(tipLabel(f))}</span>${prioBtn(s)}${rmBtn(s)}</div></div>
     <div class="c-price"><span class="px num">${nf(d.price)}</span><span class="cur">${esc(d.currency)}</span><span class="chg num ${d.change >= 0 ? "up" : "down"}">${sp(d.changePct / 100, 2)}</span></div>
     <canvas class="spark" data-spark="${esc(s)}" aria-hidden="true"></canvas>
     <div class="fc"><span>Prognose ${esc(hzLabel(hz))}</span>${f ? `<span><b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b> <span class="muted">· Anstieg ${pc(f.pUp)}</span></span>` : `<span class="muted">${esc(intraMsg(s))}</span>`}</div>
-    <div class="meta"><span>Stärke ${d.total.strength} % · Verlässlichkeit ${esc(d.total.reliability)}</span><span>${esc(whenTxt(d))}</span></div>
+    <div class="meta"><span>${!f ? "" : f.tip ? `Treffer-Wahrscheinlichkeit ${pc(f.pDir)} (mind. ${pc(f.lb)})` : `zu unsicher: ${pc(f.pDir)}, nicht sicher über 50 %`}</span><span>${esc(whenTxt(d))}</span></div>
   </div>`;
 }
 function renderSummary(){
   const ds = symbols.filter(ready).map(s => data[s]);
   if (!ds.length){ $("#summary").innerHTML = ""; return; }
-  const nb = ds.filter(d => d.total.dir > 0).length, ns = ds.length - nb;
+  const tips = ds.map(d => fcFor(d.symbol)), nb = tips.filter(f => f && f.tip && f.dirF > 0).length, ns = tips.filter(f => f && f.tip && f.dirF < 0).length, nn = ds.length - nb - ns;
   const fcs = ds.map(d => [d, fcFor(d.symbol)]).filter(x => x[1]).sort((a, b) => b[1].exp - a[1].exp);
   const bdf = fcs[0], wdf = fcs[fcs.length - 1];
   const t = (label, d, f) => `<div class="tile" data-open="${esc(d.symbol)}" role="button" tabindex="0"><div class="eyebrow">${label} · ${esc(hzLabel(hz))}</div>
     <div class="t-val">${esc(d.symbol)} <b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b></div><div class="t-sub">${esc(d.name)} · Anstieg ${pc(f.pUp)}</div></div>`;
   $("#summary").innerHTML = `
-    <div class="tile"><div class="eyebrow">Signale in deiner Liste</div>
-      <div class="t-val"><span class="up">${nb} × Kaufen</span> · <span class="down">${ns} × Verkaufen</span></div>
-      <div class="sbar" style="display:flex"><i style="width:${100 * nb / ds.length}%;background:var(--up)"></i><i style="width:${100 * ns / ds.length}%;background:var(--down)"></i></div></div>
+    <div class="tile"><div class="eyebrow">Tipps · ${esc(hzLabel(hz))}</div>
+      <div class="t-val"><span class="up">${nb} × Kaufen</span> · <span class="down">${ns} × Verkaufen</span> · <span class="muted">${nn} × kein Tipp</span></div>
+      <div class="sbar" style="display:flex"><i style="width:${100 * nb / ds.length}%;background:var(--up)"></i><i style="width:${100 * ns / ds.length}%;background:var(--down)"></i><i style="width:${100 * nn / ds.length}%;background:var(--line)"></i></div></div>
     ${bdf ? t("Beste Prognose", bdf[0], bdf[1]) : `<div class="tile"><div class="eyebrow">Prognose · ${esc(hzLabel(hz))}</div><div class="t-val muted">lädt Stundenkerzen …</div></div>`}${fcs.length > 1 ? t("Schwächste Prognose", wdf[0], wdf[1]) : ""}
     <div class="tile"><div class="eyebrow">${mode === "demo" ? "Datenquelle" : "Twelve Data heute"}</div>
       <div class="t-val num">${mode === "demo" ? "Simulation" : usedToday() + " / " + DAY_LIMIT}</div><div class="t-sub">${mode === "demo" ? "keine echten Kurse" : "Abfragen verbraucht"}</div></div>`;
@@ -741,7 +783,8 @@ function renderSummary(){
 function renderOverview(){
   let list = symbols.slice();
   const val = (s, f, d) => ready(s) ? f(data[s]) : d;
-  if (sortBy === "score") list.sort((a, b) => val(b, x => x.total.score, -9) - val(a, x => x.total.score, -9));
+  const tipv = s => { const f = fcFor(s); return f ? f.lb + (f.tip ? 1 : 0) : -1; };
+  if (sortBy === "score") list.sort((a, b) => tipv(b) - tipv(a));
   if (sortBy === "chg") list.sort((a, b) => val(b, x => x.changePct, -999) - val(a, x => x.changePct, -999));
   const fcv = s => { const f = fcFor(s); return f ? f.exp : -9; };
   if (sortBy === "fc") list.sort((a, b) => fcv(b) - fcv(a));
@@ -767,6 +810,34 @@ function render(){
 // ---------------------------------------------------------------------
 // Detailseite
 // ---------------------------------------------------------------------
+function tipPanel(d, ia, f, isH){
+  if (!f) return `<p class="evid">${esc(isH ? intraMsg(d.symbol) : "wird berechnet …")}</p>`;
+  const src = ia || d, dir = f.tip ? f.dirF : d.total.dir, p = src.price;
+  const drv = (src.drivers || []).slice().sort((a, b) => Math.abs(b.c) - Math.abs(a.c));
+  const pro = drv.filter(x => sgn(x.c) === dir).slice(0, 5), con = drv.filter(x => sgn(x.c) === -dir).slice(0, 3);
+  const li = a => a.map(x => `<li>${esc(x.name + ": " + x.note)}</li>`).join("");
+  const baseDir = f.dirF > 0 ? f.pAll : 1 - f.pAll, word = f.dirF > 0 ? "gestiegen" : "gefallen";
+  let h = "";
+  if (f.tip){
+    h += `<p class="evid">In ähnlichen Situationen${f.trendUsed ? " (gleiche Signalstufe und gleicher langfristiger Trend)" : " (gleiche Signalstufe)"} ist der Kurs innerhalb von ${esc(hzLabel(hz))} meistens ${word}:
+      Die Wahrscheinlichkeit beträgt <b>${pc(f.pDir)}</b>, vorsichtig geschätzt mindestens ${pc(f.lb)}. Zum Vergleich: Allgemein ist er in ${pc(baseDir)} der Fälle ${word}.</p>`;
+    if (f.pDir - baseDir < 0.02) h += `<div class="warn">Der Tipp beruht vor allem auf dem allgemeinen Trend dieser Aktie, weniger auf dem aktuellen Signal.</div>`;
+    if (f.acc && f.acc.shownHit != null) h += `<p class="evid">Rückblick: Tipps nach genau dieser Regel lagen früher in <b>${pc(f.acc.shownHit)}</b> der Fälle richtig (${f.acc.shownN} Tipps).</p>`;
+    h += `<div class="plan">${f.dirF > 0
+      ? `Erwartet in ${esc(hzLabel(hz))}: ${nf(p * (1 + f.exp))} ${esc(d.currency)} (${sp(f.exp, isH ? 2 : 1)}). Mit 80 % Wahrscheinlichkeit zwischen ${nf(p * (1 + f.lo))} und ${nf(p * (1 + f.hi))}. Stop-Loss knapp unter ${nf(p * (1 + f.lo))}.`
+      : `Jetzt nicht kaufen. Erwartet in ${esc(hzLabel(hz))}: ${nf(p * (1 + f.exp))} ${esc(d.currency)} (${sp(f.exp, isH ? 2 : 1)}). Wer die Aktie hat: absichern, Stop bei etwa ${nf(p * (1 + f.lo))}.`}</div>`;
+    h += (pro.length ? `<div class="lbl ${dir > 0 ? "up" : "down"}">Dafür spricht</div><ul>${li(pro)}</ul>` : "") + (con.length ? `<div class="lbl ${dir > 0 ? "down" : "up"}">Dagegen spricht</div><ul>${li(con)}</ul>` : "");
+    if (!isH && dir === d.total.dir) h += d.tip.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join("");
+  } else {
+    h += f.tipToday
+      ? `<p class="evid"><b>Kein Tipp</b>: Heute spräche zwar ${pc(f.pDir)} für ${f.dirF > 0 ? "einen Anstieg" : "einen Rückgang"}, aber diese Regel hat sich bei diesem Wert früher nicht sicher bewährt
+        (${f.acc && f.acc.shownHit != null ? `Tipps lagen nur zu ${pc(f.acc.shownHit)} richtig, bei ${f.acc.shownN} Fällen` : "zu wenige frühere Tipps zum Prüfen"}). Ein anderer Zeitraum kann klarer sein, siehe Reiter „Prognose“.</p>`
+      : `<p class="evid"><b>Kein Tipp</b>, weil sich die Richtung nicht sicher genug bestimmen lässt: ${f.dirF > 0 ? "Anstieg" : "Rückgang"} mit ${pc(f.pDir)}, vorsichtige Untergrenze nur ${pc(f.lb)}.
+        Ein Tipp erscheint erst, wenn auch die Untergrenze über 50 % liegt und sich die Regel bei diesem Wert bewährt hat. Ein anderer Zeitraum kann klarer sein, siehe Reiter „Prognose“.</p>`;
+    h += `<div class="lbl muted">Was die Indikatoren sagen (nur zur Information)</div>` + (pro.length ? `<ul>${li(pro.slice(0, 3))}</ul>` : "") + (con.length ? `<div class="lbl muted">Dagegen</div><ul>${li(con)}</ul>` : "");
+  }
+  return h + `<div class="fine">Keine Anlageberatung. Frühere Trefferquoten sind keine Garantie.</div>`;
+}
 function renderDetail(){
   const d = data[selected], t = d.tip, R = d.reliability, up = d.total.dir > 0;
   const isH = hz.u === "h", ia = isH && intra[selected] ? intra[selected].analysis : null, cd = ia || d;
@@ -788,14 +859,7 @@ function renderDetail(){
         <canvas class="chart" id="cInd" style="height:150px"></canvas>
         ${chartTab === "signal" ? `<div class="fine">Über 0 = Kaufsignal, unter 0 = Verkaufssignal, ${ia ? "Stunde für Stunde" : "Tag für Tag"} gleich berechnet wie jetzt.</div>` : ""}</div>
     </div><div>
-      <div class="panel tip"><h3>Tipp</h3>
-        <p class="evid">${esc(t.evidence)}</p>
-        ${t.reasons.length ? `<div class="lbl up">Dafür spricht</div><ul>${t.reasons.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
-        ${t.contra.length ? `<div class="lbl down">Dagegen spricht</div><ul>${t.contra.map(r => `<li>${esc(r)}</li>`).join("")}</ul>` : ""}
-        ${t.plan ? `<div class="plan">${esc(t.plan)}</div>` : ""}
-        ${conflict ? `<div class="warn">Signal und Prognose zeigen in verschiedene Richtungen: Früher ging es nach solchen Signalen im Schnitt eher ${f.exp > 0 ? "aufwärts" : "abwärts"}.</div>` : ""}
-        ${t.warnings.map(w => `<div class="warn">${esc(w)}</div>`).join("")}
-        <div class="fine">Keine Anlageberatung. Frühere Trefferquoten sind keine Garantie.</div></div>
+      <div class="panel tip"><h3>Tipp · ${esc(hzLabel(hz))}</h3>${tipPanel(d, ia, f0, isH)}</div>
     </div></div>`;
   } else if (dTab === "forecast"){
     const iaF = intra[selected] && intra[selected].analysis, list = [], hs = [1, 2, 4, 6], dsn = [1, 5, 10, 21, 63, 126, 252];
@@ -809,14 +873,16 @@ function renderDetail(){
         <button class="btn" type="button" data-intra="1">Stundenkerzen laden</button>
         ${it && it.error ? `<div class="errtxt">${esc(it.error)}</div>` : wantIntra.has(selected) || hz.u === "h" ? `<span class="muted"> wird geladen …</span>` : ""}</div>`}
       <div class="tablewrap"><table class="fct">
-      <thead><tr><th>Zeitraum</th><th>Erwartet</th><th>Anstieg</th><th>80 %-Spanne</th><th>Spanne (grafisch)</th><th>Kurs ca.</th><th title="Wie oft die Richtung dieser Prognose früher gestimmt hat">Früher richtig</th></tr></thead><tbody>
+      <thead><tr><th>Zeitraum</th><th>Erwartet</th><th>Anstieg</th><th>80 %-Spanne</th><th>Spanne (grafisch)</th><th>Kurs ca.</th><th title="Wie oft die Richtung dieser Prognose früher gestimmt hat">Früher richtig</th><th>Tipp</th><th title="Wie oft die Tipps, die die Seite damals angezeigt hätte, richtig waren">Gezeigte Tipps richtig</th></tr></thead><tbody>
       ${list.map(([h, x]) => { const S = Math.max(0.002, Math.abs(x.lo), Math.abs(x.hi)), base = h.u === "h" ? iaF.price : d.price, dg = h.u === "h" ? 2 : 1;
         return `<tr class="${sameHz(h, hz) ? "cur-h" : ""}"><td><b>${esc(hzLabel(h))}</b>${x.few ? ' <span class="muted" title="wenig unabhängige Vergleichsfälle">*</span>' : ""}</td>
         <td class="v ${x.exp >= 0 ? "up" : "down"}"><b>${sp(x.exp, dg)}</b></td><td class="v">${pc(x.pUp)}</td>
         <td class="v">${sp(x.lo, dg - 1)} bis ${sp(x.hi, dg - 1)}</td>
         <td><div class="rbar"><span class="zero" style="left:50%"></span><span class="rng" style="left:${xp(x.lo, S)}%;width:${(xp(x.hi, S) - xp(x.lo, S)).toFixed(1)}%"></span><span class="exp" style="left:${xp(x.exp, S)}%;background:${x.exp >= 0 ? "var(--up)" : "var(--down)"}"></span></div></td>
         <td class="v">${nf(base * (1 + x.exp))}</td>
-        <td class="v">${x.acc ? `${pc(x.acc.hit)} <span class="muted">(Basis ${pc(x.acc.base)})</span>` : "–"}</td></tr>`; }).join("")}
+        <td class="v">${x.acc ? `${pc(x.acc.hit)} <span class="muted">(Basis ${pc(x.acc.base)})</span>` : "–"}</td>
+        <td><span class="pill ${pillCls(tipLabel(x))}">${esc(tipLabel(x))}</span> <span class="muted num">${pc(x.pDir)}</span></td>
+        <td class="v">${x.acc && x.acc.shownHit != null ? `${pc(x.acc.shownHit)} <span class="muted">(${x.acc.shownN})</span>` : "–"}</td></tr>`; }).join("")}
       </tbody></table></div>
       <div class="fine">* Wenige unabhängige Vergleichszeiträume: Die Prognose wurde deshalb stark in Richtung „kein Trend“ gezogen und ist besonders unsicher. „Früher richtig“ erscheint nur bei genug unabhängigen Zeiträumen,
       „Basis“ ist die Quote, wenn man immer die häufigere Richtung vorhergesagt hätte. Die grafische Spanne ist je Zeile skaliert. Stunden sind Handelsstunden (bei Aktien ohne Nacht und Wochenende).</div></div>
@@ -861,14 +927,20 @@ function renderDetail(){
       <button class="btn ghost" type="button" id="rmDetail">Aus Liste entfernen</button></span></div>
     <div class="dhead"><div><h2>${esc(d.name)}</h2><div class="dsub">${esc(d.symbol)}${d.exchange ? " · " + esc(d.exchange) : ""} · Letzter Kurs ${esc(time)}</div></div>
       <div class="dprice"><span class="px num">${nf(d.price)}</span> <span class="cur">${esc(d.currency)}</span><div class="num ${d.change >= 0 ? "up" : "down"}">${d.change >= 0 ? "+" : "−"}${nf(Math.abs(d.change))} (${sp(d.changePct / 100, 2)})</div></div></div>
-    <div class="hero ${up ? "dir-up" : "dir-down"}">
-      <div><div class="eyebrow">Empfehlung</div>
-        <div class="h-title">${up ? "Kaufen ist besser" : "Verkaufen ist besser"}</div>
-        <span class="pill ${pillCls(d.total.label)}">${esc(d.total.label)}</span>
-        <div class="h-stats">
-          <div><span class="eyebrow">Signalstärke</span><b>${d.total.strength} %</b><div class="sbar"><i style="width:${d.total.strength}%;background:${up ? "var(--up)" : "var(--down)"}"></i></div></div>
-          <div><span class="eyebrow">Verlässlichkeit</span><b>${esc(R.label)}</b><small>${R.hitRate != null ? pc(R.hitRate) + " Treffer bei ähnlichen Signalen" : "zu wenig Daten"}</small></div>
-        </div></div>
+    <div class="hero ${!f0 || !f0.tip ? "dir-none" : f0.dirF > 0 ? "dir-up" : "dir-down"}">
+      <div><div class="eyebrow">Tipp · ${esc(hzLabel(hz))}</div>
+        <div class="h-title">${!f0 ? "Tipp wird berechnet …" : !f0.tip ? "Kein klarer Tipp" : f0.dirF > 0 ? "Kaufen ist besser" : "Verkaufen ist besser"}</div>
+        <span class="pill ${pillCls(tipLabel(f0))}">${esc(tipLabel(f0))}</span>
+        ${f0 ? `<div class="h-stats">
+          <div><span class="eyebrow">Wahrscheinlichkeit ${f0.dirF > 0 ? "Anstieg" : "Rückgang"}</span><b>${pc(f0.pDir)}</b>
+            <div class="sbar"><i style="width:${(100 * f0.pDir).toFixed(0)}%;background:${f0.tip ? (f0.dirF > 0 ? "var(--up)" : "var(--down)") : "var(--muted)"}"></i></div>
+            <small>vorsichtig geschätzt mindestens ${pc(f0.lb)}</small></div>
+          <div><span class="eyebrow">Gezeigte Tipps früher</span><b>${f0.acc && f0.acc.shownHit != null ? pc(f0.acc.shownHit) + " richtig" : "–"}</b>
+            <small>${f0.acc ? (f0.acc.shownHit != null ? `${f0.acc.shownN} Tipps, an ${pc(f0.acc.coverage)} der Zeitpunkte` : "zu wenige Tipps für eine Aussage") : "zu wenig Daten"}</small></div>
+        </div>
+        ${f0.tip ? "" : `<div class="fine">${f0.tipToday ? "Heute läge die Wahrscheinlichkeit sicher über 50 %, aber die Regel hat sich bei diesem Wert früher nicht sicher bewährt. Deshalb gibt es keinen Tipp."
+          : `Die Wahrscheinlichkeit für ${f0.dirF > 0 ? "einen Anstieg" : "einen Rückgang"} liegt bei ${pc(f0.pDir)}, aber nicht sicher über 50 % (vorsichtige Untergrenze ${pc(f0.lb)}). Deshalb gibt es keinen Tipp.`}</div>`}` : ""}
+        <div class="fine">Indikatoren allein: ${esc(d.total.label)} (Stärke ${d.total.strength} %)</div></div>
       <div class="h-fc"><div class="eyebrow">Prognose · ${esc(hzLabel(hz))}${ia ? " · aus Stundenkerzen" : ""}</div>
         ${f0 ? `<div class="big ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, isH ? 2 : 1)}</div>
         <div class="row"><span>Kurs ca.</span><b class="num">${nf(cd.price * (1 + f.exp))} ${esc(d.currency)}</b></div>
@@ -1581,7 +1653,8 @@ function analyze(raw){
     symbol: raw.symbol, name: raw.name, currency: raw.currency, exchange: raw.exchange, marketTime: raw.marketTime,
     price, change, changePct: 100 * change / prev, dayHigh: h[I], dayLow: l[I],
     high52: Math.max(...year.map(x => x.h)), low52: Math.min(...year.map(x => x.l)), volume: v[I],
-    signals: sig, groups, total: tot2, tip, pivots, reliability, crypto, F: {c, score, sd: hv, start},
+    signals: sig, groups, total: tot2, tip, pivots, reliability, crypto, F: {c, score, sd: hv, start, trend: c.map((x, i) => s200[i] == null ? 0 : sgn(x - s200[i]))},
+    drivers: defs.map((dd, k) => ({name: sig[k].name, note: sig[k].note, c: contrib[k]})).filter(x => x.c !== 0),
     chart: {
       dates: cs.slice(n - k).map(x => raw.intraday ? new Date(x.t * 1000).toISOString().replace(/^\d{4}-(\d\d)-(\d\d)T(\d\d:\d\d).*$/, "$2.$1. $3")
       : new Date(x.t * 1000).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "UTC"})),
@@ -1670,7 +1743,8 @@ function drawChart(cv, o){
     }
     if (o.dates){
       const lw = Math.max(...o.dates.map(t => x.measureText(t).width)) + 14, maxL = Math.max(2, Math.floor((X(o.n - 1) - pl) / lw)), step = Math.ceil(o.n / maxL);
-      for (let i = 0; i < o.n; i += step) x.fillText(o.dates[i], Math.min(Math.max(pl, X(i) - lw / 2 + 7), W - pr - lw), H - 5);
+      let endX = -Infinity;
+      for (let i = 0; i < o.n; i += step){ const tx = Math.min(Math.max(pl, X(i) - lw / 2 + 7), W - pr - lw); if (tx < endX) continue; x.fillText(o.dates[i], tx, H - 5); endX = tx + lw; }
     }
   }
   (o.hlines || []).forEach(([v, c]) => { x.strokeStyle = colorOf(c); x.setLineDash([4, 4]); x.beginPath(); x.moveTo(pl, Y(v)); x.lineTo(W - pr, Y(v)); x.stroke(); x.setLineDash([]); });
