@@ -72,7 +72,7 @@ header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;backgroun
 .add input{width:220px;max-width:100%}
 .hz{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .chips{display:flex;background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:3px;gap:2px}
-.chip{border:0;background:transparent;border-radius:6px;padding:5px 10px;font:600 13px/1 var(--cond);cursor:pointer;color:var(--muted)}
+.chip{border:0;background:transparent;border-radius:6px;padding:5px 10px;font:600 13px/1 var(--cond);cursor:pointer;color:var(--muted);white-space:nowrap;flex:none}
 .chip.on{background:var(--accent);color:var(--on-accent)}
 #hzRange{width:150px;accent-color:var(--accent)}
 .hzval{font:600 13px var(--mono);min-width:88px}
@@ -301,6 +301,54 @@ body{background:radial-gradient(1100px 420px at 8% -8%,var(--accent-soft),transp
 .nf-item details summary{cursor:pointer;font-weight:600;margin-top:3px}
 .nf-item details p{font-size:13.5px;color:var(--muted);margin:6px 0;line-height:1.55}
 .linkbtn{border:0;background:none;color:var(--accent);font-weight:600;cursor:pointer;padding:0;font-size:inherit}
+/* Aufbau: Navigation, Bereiche, Detail-Spalten */
+.bar{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);align-items:center}
+.brand{margin-right:0}.status{justify-self:end}
+.mainnav{position:relative;display:flex;gap:2px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:3px}
+.mainnav button{position:relative;z-index:1;display:flex;align-items:center;gap:7px;border:0;background:transparent;color:var(--muted);font:600 14px var(--font);padding:7px 14px;border-radius:9px;cursor:pointer;transition:color .25s}
+.mainnav button.on{color:var(--on-accent)}.mainnav button:not(.on):hover{color:var(--text)}
+.mainnav svg{width:17px;height:17px;flex:none}
+.nav-ind{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:9px;background:var(--accent);transition:transform .4s cubic-bezier(.2,.8,.2,1),width .4s cubic-bezier(.2,.8,.2,1)}
+@media (max-width:900px){.bar{grid-template-columns:minmax(0,1fr) auto}.mainnav{grid-column:1/-1;order:3;justify-self:start}}
+@media (max-width:640px){
+  header.top{position:static;background:transparent;backdrop-filter:none}
+  .bar{grid-template-columns:minmax(0,1fr);row-gap:8px}
+  .status{justify-self:stretch;justify-content:space-between;font-size:12px}
+  .subbar .hz{min-width:0;width:100%}#hzChips{min-width:0;max-width:100%;overflow-x:auto;scrollbar-width:none}#hzChips::-webkit-scrollbar{display:none}
+  .mainnav{position:fixed;left:12px;right:12px;justify-self:stretch;width:auto;bottom:calc(10px + env(safe-area-inset-bottom,0px));z-index:40;justify-content:space-around;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+  .mainnav button{flex:1;flex-direction:column;gap:2px;font-size:11px;padding:6px 4px}
+  body{padding-bottom:88px}
+}
+.subbar{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;padding-block:14px}
+.homegrid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:14px;align-items:start}
+.hg-side .summary{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px}
+@media (max-width:900px){.homegrid{grid-template-columns:minmax(0,1fr)}}
+.ph{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:6px;flex-wrap:wrap}.ph h3{margin:0}
+.tip-list,.mini-list{list-style:none;margin:0;padding:0}
+.tip-row,.mini{display:grid;align-items:center;gap:12px;padding:9px 6px;border-bottom:1px solid var(--line);border-radius:8px;cursor:pointer;transition:background .2s}
+.tip-row{grid-template-columns:auto minmax(0,1fr) auto auto auto}
+.mini{grid-template-columns:auto minmax(0,1fr) 96px auto auto}
+.tip-row:last-child,.mini:last-child{border-bottom:0}
+.tip-row:hover,.mini[data-open]:hover{background:var(--surface2)}
+.tr-main,.m-id{display:flex;flex-direction:column;min-width:0}.tr-main b,.m-id b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr-main span,.m-id span{font-size:12px}
+.tr-num,.m-px{display:flex;flex-direction:column;align-items:flex-end}.tr-num small{font-size:11px;color:var(--muted)}.m-px span{font-size:12.5px}
+.m-spark{width:96px;height:30px;display:block}
+.mini.pending{cursor:default;opacity:.7;grid-template-columns:auto minmax(0,1fr)}
+@media (max-width:560px){.mini{grid-template-columns:auto minmax(0,1fr) auto}.m-spark,.mini .pill{display:none}.tip-row{grid-template-columns:auto minmax(0,1fr) auto}.tip-row .tr-num,.tip-row .pill{display:none}.tip-row .tr-num:first-of-type{display:flex}}
+.alt-hz{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px}.alt-hz .chip{box-shadow:inset 0 0 0 1px var(--line)}.alt-hz .chip b{color:var(--accent);background:var(--accent-soft);border-radius:5px;padding:1px 5px;margin-left:6px}
+.settings{margin-top:14px}.settings summary{cursor:pointer;font-weight:600}.settings .note{margin:10px 0}
+.set-row{display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap}
+.toolbar{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.nf-firms{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px}.nf-firms .chip{display:inline-flex;gap:6px;align-items:center;box-shadow:inset 0 0 0 1px var(--line)}.nf-firms .avatar{border-radius:5px}
+.dlayout{display:grid;grid-template-columns:minmax(0,1fr) 340px;grid-template-areas:"main side";gap:16px;align-items:start}
+.dmain{grid-area:main;min-width:0}.dside{grid-area:side;min-width:0}
+.dside .portrait{grid-template-columns:minmax(0,1fr);position:sticky;top:calc(env(safe-area-inset-top,0px) + 108px);padding:16px;gap:12px}
+.dside .p-art{max-height:150px}.dside .perf{grid-template-columns:repeat(2,minmax(0,1fr))}.dside .facts{grid-template-columns:minmax(0,1fr)}
+.dlayout .cols{grid-template-columns:minmax(0,1fr)}
+@media (max-width:1100px){.dlayout{grid-template-columns:minmax(0,1fr);grid-template-areas:"side" "main"}.dside .portrait{position:static;grid-template-columns:minmax(0,240px) minmax(0,1fr)}.dside .facts{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
+@media (max-width:760px){.dside .portrait{grid-template-columns:minmax(0,1fr)}}
+.view.anim-in{animation:fadein .4s ease both}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
   .ticker{overflow-x:auto;-webkit-mask-image:none;mask-image:none}
@@ -321,45 +369,67 @@ body{background:radial-gradient(1100px 420px at 8% -8%,var(--accent-soft),transp
     <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true"><rect width="30" height="30" rx="8" fill="var(--accent)"/><path d="M6 20l5-5 4 3 8-9" fill="none" stroke="var(--on-accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23" cy="9" r="2.2" fill="var(--on-accent)"/></svg>
     <div><div class="title">Aktien-Dashboard</div><span class="src" id="srcTag">verbinde …</span></div>
   </div>
+  <nav class="mainnav" id="mainNav" aria-label="Bereiche"><span class="nav-ind" aria-hidden="true"></span>
+    <button type="button" data-view="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v4h-7zM13 10h7v10h-7zM4 13h7v7H4z" fill="currentColor"/></svg><span>Übersicht</span></button>
+    <button type="button" data-view="stocks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17l5-5 4 3 7-8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M15 7h4v4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Aktien</span></button>
+    <button type="button" data-view="news"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h13v14H6a2 2 0 0 1-2-2zM17 9h3v8a2 2 0 0 1-2 2h-1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/><path d="M7 9h7M7 12.5h7M7 16h4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>Neuigkeiten</span></button>
+  </nav>
   <div class="status"><span class="dot" id="dot"></span><span id="stat">verbinde …</span>
     <button class="btn ghost" id="nowBtn" type="button">Aktualisieren</button></div>
 </div>
   <div class="ticker" id="ticker" hidden aria-label="Kursleiste, antippen zum Öffnen"><div class="track" id="tickTrack"></div></div></header>
-<div class="wrap controls">
-  <form id="addForm" class="add">
-    <input id="symIn" type="text" placeholder="Symbol, z. B. NFLX, ETH/USD" autocomplete="off" aria-label="Symbol hinzufügen">
-    <button class="btn">Hinzufügen</button>
-    <button type="button" class="btn ghost" id="resetBtn" title="Standardliste wiederherstellen">Standard</button>
-  </form>
+<div class="wrap subbar">
   <div class="hz" role="group" aria-label="Prognose-Zeitraum">
     <span class="eyebrow">Prognose für</span>
     <div class="chips" id="hzChips"></div>
     <input type="range" id="hzRange" min="0" max="23" step="1" aria-label="Prognose-Zeitraum">
     <span class="hzval" id="hzVal"></span>
   </div>
-  <div class="opts">
+</div>
+<main class="wrap">
+  <div id="banner" class="banner" hidden><span id="bannerText"></span>
+    <button class="btn" id="bannerDemo" type="button" hidden>Simulierte Kurse anzeigen</button></div>
+  <section id="vHome" class="view">
+    <div class="welcome" id="welcome"><div class="w-text" id="wText"></div><div class="w-art" id="wArt"></div></div>
+    <div class="homegrid">
+      <div class="hg-main">
+        <section class="panel" id="homeTips" aria-label="Verlässliche Tipps"></section>
+        <section class="panel" aria-label="Deine Werte"><div class="ph"><h3>Deine Werte</h3><button type="button" class="linkbtn" data-view="stocks">Als Karten ansehen →</button></div><ul class="mini-list" id="homeList"></ul></section>
+      </div>
+      <div class="hg-side">
+        <div class="summary" id="summary"></div>
+        <section class="panel newsfeed" id="newsFeed" aria-label="Neuigkeiten"></section>
+      </div>
+    </div>
+    <details class="panel settings" id="settings"><summary>Einstellungen &amp; Hinweise</summary>
+      <div class="set-row"><label for="everySel">Abfragetakt</label>
+    <select id="everySel" aria-label="Abfragetakt">
+        <option value="10">Takt: alle 10 s</option>
+        <option value="30">Takt: alle 30 s</option>
+        <option value="60">Takt: alle 60 s</option>
+    </select>
+      </div>
+      <div class="note" id="note">Verbinde mit Twelve Data …</div>
+      <button type="button" class="btn ghost" id="resetBtn" title="Standardliste wiederherstellen">Standardliste wiederherstellen</button>
+    </details>
+  </section>
+  <section id="vStocks" class="view" hidden>
+    <div class="toolbar">
+  <form id="addForm" class="add">
+    <input id="symIn" type="text" placeholder="Symbol, z. B. NFLX, ETH/USD" autocomplete="off" aria-label="Symbol hinzufügen">
+    <button class="btn">Hinzufügen</button>
+  </form>
     <select id="sortSel" aria-label="Sortierung">
       <option value="list">Sortierung: Liste</option>
       <option value="fc">Sortierung: Prognose</option>
       <option value="score">Sortierung: Tipp-Sicherheit</option>
       <option value="chg">Sortierung: Tagesänderung</option>
     </select>
-    <select id="everySel" aria-label="Abfragetakt">
-      <option value="10">Takt: alle 10 s</option>
-      <option value="30">Takt: alle 30 s</option>
-      <option value="60">Takt: alle 60 s</option>
-    </select>
-  </div>
-</div>
-<main class="wrap">
-  <div class="note" id="note">Verbinde mit Twelve Data …</div>
-  <div id="banner" class="banner" hidden><span id="bannerText"></span>
-    <button class="btn" id="bannerDemo" type="button" hidden>Simulierte Kurse anzeigen</button></div>
-  <section id="overview">
-    <div class="welcome" id="welcome"><div class="w-text" id="wText"></div><div class="w-art" id="wArt"></div></div>
-    <div class="summary" id="summary"></div>
-    <section class="panel newsfeed" id="newsFeed" aria-label="Neuigkeiten"></section>
+    </div>
     <div class="grid" id="grid"><div class="startup" id="startup">Das Dashboard startet …</div></div>
+  </section>
+  <section id="vNews" class="view" hidden>
+    <section class="panel newsfeed" id="newsFull" aria-label="Alle Neuigkeiten"></section>
   </section>
   <section id="detail" hidden></section>
 </main>
@@ -1006,7 +1076,7 @@ let newsTurn = false;                 // Meldungen je Wert höchstens alle 6 Stu
 const newsStore = load("news", {});           // Symbol -> {t, items, err}
 let events = load("events", []);              // [{id, sym, t, kind, title, text}]
 const tipMem = load("tipmem", {});
-let nfFilter = load("nff", "all"), nfMore = false, newsSum = {};
+let nfFilter = load("nff", "all"), nfMore = false, newsSum = {}, nfSym = null;
 const ALIAS = {NVDA: ["NVIDIA", "Nvidia"], AAPL: ["Apple"], MSFT: ["Microsoft"], AMZN: ["Amazon"], GOOGL: ["Alphabet", "Google"], META: ["Meta Platforms", "Facebook", "Instagram", "WhatsApp"],
   TSLA: ["Tesla"], SAP: ["SAP"], AMD: ["AMD", "Advanced Micro Devices"], NFLX: ["Netflix"], INTC: ["Intel"], KO: ["Coca-Cola"], DIS: ["Disney"], JPM: ["JPMorgan", "J.P. Morgan"],
   "BTC/USD": ["Bitcoin"], "ETH/USD": ["Ethereum", "Ether"]};
@@ -1128,15 +1198,17 @@ function feedItemHTML(it, withName = true, open = false){
   return `<li class="nf-item ${kc}" ${withName ? `data-newsopen="${esc(it.sym)}"` : ""}>${avatarHTML(it.sym, 34)}<div class="nf-main">
     <div class="nf-meta"><span class="nf-kind ${kc}">${kl}</span>${withName ? `<b>${esc(nm)}</b>` : ""}<span>${esc(ago(it.t))}</span></div>${body}</div></li>`;
 }
-function renderFeed(){
-  const all = feedItems(), list = all.filter(it => nfFilter === "all" || (nfFilter === "events" ? it.type === "event" : it.type === "press"));
-  const shown = list.slice(0, nfMore ? 30 : 6), pending = symbols.filter(s => ready(s) && !(newsStore[s] && newsStore[s].t)).length;
+function renderFeed(sel = "#newsFeed", full = false){
+  const all = feedItems(full && nfSym && symbols.includes(nfSym) ? nfSym : null);
+  const list = all.filter(it => nfFilter === "all" || (nfFilter === "events" ? it.type === "event" : it.type === "press"));
+  const limit = full ? 60 : 5, shown = list.slice(0, limit), pending = symbols.filter(s => ready(s) && !(newsStore[s] && newsStore[s].t)).length;
   const tabs = [["all", "Alle"], ["events", "Kursereignisse"], ["press", "Meldungen"]];
-  setHTML($("#newsFeed"), `<div class="nf-head"><h3>Neuigkeiten</h3>
-      <div class="nf-filter" role="group" aria-label="Neuigkeiten filtern">${tabs.map(([k, l]) => `<button type="button" class="chip ${nfFilter === k ? "on" : ""}" data-nff="${k}">${l}</button>`).join("")}</div></div>
+  const firms = full ? `<div class="nf-firms" role="group" aria-label="Nach Firma filtern">${[null, ...symbols.filter(ready)].map(s => `<button type="button" class="chip ${(nfSym || null) === s ? "on" : ""}" data-nfsym="${s ? esc(s) : ""}">${s ? avatarHTML(s, 18) + esc(coName(s, data[s])) : "Alle Firmen"}</button>`).join("")}</div>` : "";
+  setHTML($(sel), `<div class="nf-head"><h3>${full ? "Alle Neuigkeiten" : "Neuigkeiten"}</h3>
+      <div class="nf-filter" role="group" aria-label="Neuigkeiten filtern">${tabs.map(([k, l]) => `<button type="button" class="chip ${nfFilter === k ? "on" : ""}" data-nff="${k}">${l}</button>`).join("")}</div></div>${firms}
     ${shown.length ? `<ul class="nf-list">${shown.map(it => feedItemHTML(it)).join("")}</ul>` : `<p class="muted" style="margin:6px 0">${nfFilter === "press" ? (mode === "demo" ? "Meldungen gibt es nur mit echten Kursen." : pending ? "Meldungen werden nach und nach geladen …" : "Keine Meldungen, die diese Firmen betreffen.") : "Noch keine Kursereignisse. Sie erscheinen, sobald sich bei einem Wert etwas Auffälliges tut, zum Beispiel ein neues Jahreshoch."}</p>`}
-    ${list.length > 6 ? `<button type="button" class="btn ghost" id="nfMore">${nfMore ? "Weniger anzeigen" : `Mehr anzeigen (${Math.min(list.length, 30)})`}</button>` : ""}
-    <div class="fine">Kursereignisse erkennt die Seite selbst in den echten Kursdaten. Meldungen sind Pressemitteilungen über Twelve Data: Im kostenlosen Tarif sind sie oft einige Monate alt und teils bezahlte Marktkommentare (markiert).${pending && mode !== "demo" ? ` Meldungen für ${pending} Werte folgen.` : ""}</div>`);
+    ${!full && list.length > limit ? `<button type="button" class="btn ghost" data-view="news">Alle Neuigkeiten (${list.length}) →</button>` : ""}
+    ${full ? `<div class="fine">Kursereignisse erkennt die Seite selbst in den echten Kursdaten. Meldungen sind Pressemitteilungen über Twelve Data: Im kostenlosen Tarif sind sie oft einige Monate alt und teils bezahlte Marktkommentare (markiert).${pending && mode !== "demo" ? ` Meldungen für ${pending} Werte folgen.` : ""}</div>` : ""}`);
 }
 async function summarizeNews(s){
   const items = (newsStore[s] && newsStore[s].items) || [];
@@ -1269,7 +1341,58 @@ function renderSummary(){
     <div class="tile"><div class="eyebrow">${mode === "demo" ? "Datenquelle" : "Twelve Data heute"}</div>
       <div class="t-val num">${mode === "demo" ? "Simulation" : usedToday() + " / " + DAY_LIMIT}</div><div class="t-sub">${mode === "demo" ? "keine echten Kurse" : "Abfragen verbraucht"}</div></div>`);
 }
-function renderOverview(){
+// Übersicht: Tipps, kompakte Werteliste, Kacheln, Neuigkeiten
+function renderHomeTips(){
+  const ds = symbols.filter(ready);
+  const tips = ds.map(s => [s, fcFor(s)]).filter(([, f]) => f && f.tip).sort((a, b) => b[1].pDir - a[1].pDir);
+  let html = `<div class="ph"><h3>Verlässliche Tipps · ${esc(hzLabel(hz))}</h3></div>`;
+  if (!ds.length) html += `<p class="muted">Kurse werden geladen …</p>`;
+  else if (tips.length) html += `<ul class="tip-list">${tips.map(([s, f]) => `<li class="tip-row" data-open="${esc(s)}" role="button" tabindex="0">${avatarHTML(s, 36)}
+      <div class="tr-main"><b>${esc(coName(s, data[s]))}</b><span class="muted">${esc(coShort(s, data[s]))}</span></div>
+      <span class="pill ${pillCls(tipLabel(f))}">${esc(tipLabel(f))}</span>
+      <div class="tr-num"><b class="num">${pc(f.pDir)}</b><small>Wahrscheinlichkeit</small></div>
+      <div class="tr-num"><b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b><small>erwartet</small></div></li>`).join("")}</ul>`;
+  else {
+    const alt = HZ_CHIPS.map(([l, k]) => { const h = {u: k[0], n: +k.slice(1)}; if (sameHz(h, hz)) return null;
+      const n = ds.filter(s => { const f = fcFor(s, h); return f && f.tip; }).length; return n ? [l, k, n] : null; }).filter(Boolean);
+    html += `<p class="muted" style="margin:4px 0">Für ${esc(hzLabel(hz))} lässt sich gerade bei keinem Wert die Richtung sicher genug bestimmen.</p>`
+      + (alt.length ? `<div class="alt-hz"><span class="eyebrow">Tipps gibt es bei</span>${alt.map(([l, k, n]) => `<button type="button" class="chip" data-sethz="${k}">${l}<b>${n}</b></button>`).join("")}</div>` : "");
+  }
+  setHTML($("#homeTips"), html);
+}
+function renderHomeList(){
+  const list = symbols.slice().sort((a, b) => prioOf(b) - prioOf(a));
+  $("#homeList").innerHTML = list.map(s => {
+    const d = data[s];
+    if (!d || d.error) return `<li class="mini pending">${avatarHTML(s, 32)}<div class="m-id"><b>${esc(coName(s, d))}</b><span class="muted">${esc(d && d.error ? "nicht verfügbar" : "lädt …")}</span></div></li>`;
+    const f = fcFor(s);
+    return `<li class="mini" data-open="${esc(s)}" role="button" tabindex="0">${avatarHTML(s, 32)}<div class="m-id"><b>${esc(coName(s, d))}</b><span class="muted">${esc(s)}</span></div>
+      <canvas class="m-spark" data-mini="${esc(s)}" aria-hidden="true"></canvas>
+      <div class="m-px"><b class="num">${nf(d.price)}</b><span class="num ${d.change >= 0 ? "up" : "down"}">${sp(d.changePct / 100, 2)}</span></div>
+      <span class="pill ${pillCls(tipLabel(f))}">${esc(tipLabel(f))}</span></li>`;
+  }).join("");
+  $("#homeList").querySelectorAll("canvas[data-mini]").forEach(cv => {
+    const c = data[cv.dataset.mini].chart.c.slice(-40);
+    drawChart(cv, {n: c.length, series: [{v: c, color: c[c.length - 1] >= c[0] ? "--up" : "--down", w: 1.4, fill: true}], pad: [3, 2, 3, 2], noAxis: true});
+  });
+}
+function renderHome(){ renderSummary(); renderHomeTips(); renderHomeList(); renderFeed("#newsFeed"); }
+function renderNewsView(){ renderFeed("#newsFull", true); }
+const VIEW_EL = {home: "#vHome", stocks: "#vStocks", news: "#vNews"}, VIEW_NAME = {home: "Übersicht", stocks: "Aktien", news: "Neuigkeiten"};
+let view = load("view", "home");
+if (!VIEW_EL[view]) view = "home";
+function syncNav(){
+  document.querySelectorAll("#mainNav [data-view]").forEach(b => { const on = b.dataset.view === view; b.classList.toggle("on", on); b.setAttribute("aria-current", on ? "page" : "false"); });
+  const ind = $("#mainNav .nav-ind"), on = $("#mainNav button.on");
+  if (ind && on){ ind.style.width = on.offsetWidth + "px"; ind.style.transform = `translateX(${on.offsetLeft - 3}px)`; }
+}
+function setView(v){
+  if (!VIEW_EL[v]) return;
+  view = v; save("view", v);
+  if (selected){ selected = null; save("selected", null); }
+  render(); window.scrollTo({top: 0}); replay($(VIEW_EL[v]), "anim-in");
+}
+function renderStocks(){
   let list = symbols.slice();
   const val = (s, f, d) => ready(s) ? f(data[s]) : d;
   const tipv = s => { const f = fcFor(s); return f ? f.lb + (f.tip ? 1 : 0) : -1; };
@@ -1278,12 +1401,9 @@ function renderOverview(){
   const fcv = s => { const f = fcFor(s); return f ? f.exp : -9; };
   if (sortBy === "fc") list.sort((a, b) => fcv(b) - fcv(a));
   list.sort((a, b) => prioOf(b) - prioOf(a));   // stabil: Priorität zuerst, innerhalb davon die gewählte Sortierung
-  renderSummary();
-  renderFeed();
   $("#grid").innerHTML = list.map((s, k) => cardHTML(s, k)).join("");
   pendingBefore.clear();
   list.forEach(s => { seenCards.add(s); if (!ready(s)) pendingBefore.add(s); });
-  renderTicker();
   document.querySelectorAll("canvas[data-spark]").forEach(cv => {
     const s = cv.dataset.spark, d = data[s]; if (!ready(s)) return;
     const card = cv.closest(".card"); if (card && card.dataset.new === "1") cv.classList.add("wipe");
@@ -1352,9 +1472,14 @@ function render(){
   updateNote(); updateBanner(); updateStatus();
   if (mode !== "start") updateEvents();
   const showDetail = selected && ready(selected);
-  $("#overview").hidden = !!showDetail;
+  for (const [v, el] of Object.entries(VIEW_EL)) $(el).hidden = !!showDetail || view !== v;
   $("#detail").hidden = !showDetail;
-  if (showDetail){ renderDetail(); renderTicker(); } else renderOverview();
+  syncNav();
+  if (showDetail) renderDetail();
+  else if (view === "home") renderHome();
+  else if (view === "stocks") renderStocks();
+  else renderNewsView();
+  renderTicker();
 }
 
 // ---------------------------------------------------------------------
@@ -1474,12 +1599,12 @@ function renderDetail(){
         ${Object.entries(d.pivots).map(([k, v]) => `<span>${k}</span><span class="num ${k[0] === "R" ? "down" : k[0] === "S" ? "up" : ""}">${nf(v)}${Math.abs(v - d.price) / d.price < 0.01 ? " · nahe Kurs" : ""}</span>`).join("")}</div></div></div></div>`;
   }
   $("#detail").innerHTML = `
-    <div class="dnav"><button class="btn ghost" type="button" id="backBtn">← Übersicht</button>
+    <div class="dnav"><button class="btn ghost" type="button" id="backBtn">← ${esc(VIEW_NAME[view] || "Übersicht")}</button>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="eyebrow">Priorität</span><span class="prioseg">${[2, 1, 0].map(v => `<button type="button" class="chip ${prioOf(selected) === v ? "on" : ""}" data-setprio="${v}">${PRIO[v].name}</button>`).join("")}</span>
       <button class="btn ghost" type="button" id="rmDetail">Aus Liste entfernen</button></span></div>
     <div class="dhead"><div class="dtitle">${avatarHTML(selected, 56)}<div><h2>${esc(coName(selected, d))}</h2><div class="dsub">${esc(d.symbol)}${d.exchange ? " · " + esc(d.exchange) : ""} · Letzter Kurs ${esc(time)}</div></div></div>
       <div class="dprice"><span class="px num">${nf(d.price)}</span> <span class="cur">${esc(d.currency)}</span><div class="num ${d.change >= 0 ? "up" : "down"}">${d.change >= 0 ? "+" : "−"}${nf(Math.abs(d.change))} (${sp(d.changePct / 100, 2)})</div></div></div>
-    ${portraitHTML(selected, d)}
+    <div class="dlayout"><aside class="dside">${portraitHTML(selected, d)}</aside><div class="dmain">
     <div class="hero ${!f0 || !f0.tip ? "dir-none" : f0.dirF > 0 ? "dir-up" : "dir-down"}">
       <div><div class="eyebrow">Tipp · ${esc(hzLabel(hz))}</div>
         <div class="h-title">${!f0 ? "Tipp wird berechnet …" : !f0.tip ? "Kein klarer Tipp" : f0.dirF > 0 ? "Kaufen ist besser" : "Verkaufen ist besser"}</div>
@@ -1506,7 +1631,7 @@ function renderDetail(){
       </div>
     </div>
     <div class="tabs" role="tablist">${tabs.map(([k, l]) => `<button type="button" role="tab" class="tab ${dTab === k ? "on" : ""}" aria-selected="${dTab === k}" data-dtab="${k}">${l}</button>`).join("")}<span class="tab-ind" aria-hidden="true"></span></div>
-    <div class="tabbody ${tabAnim ? "tab-in" : ""}">${body}</div>`;
+    <div class="tabbody ${tabAnim ? "tab-in" : ""}">${body}</div></div></div>`;
   const wasEnter = enterDetail, wasTab = tabAnim;
   afterDetail();
   enterDetail = false; tabAnim = false;
@@ -1529,7 +1654,7 @@ function renderDetail(){
 // Bedienung
 // ---------------------------------------------------------------------
 function openSym(s){ if (!ready(s)) return; selected = s; save("selected", s); enterDetail = true; lastTab = null; render(); window.scrollTo({top: 0}); }
-function closeDetail(){ selected = null; save("selected", null); render(); replay($("#overview"), "anim-in"); }
+function closeDetail(){ selected = null; save("selected", null); render(); replay($(VIEW_EL[view]), "anim-in"); }
 function removeSym(s){
   symbols = symbols.filter(x => x !== s); save("symbols", symbols);
   if (selected === s){ selected = null; save("selected", null); }
@@ -1542,16 +1667,23 @@ $("#grid").addEventListener("click", e => {
   if (rm){ e.stopPropagation(); removeSym(rm.dataset.rm); return; }
   const c = e.target.closest(".card"); if (c) openSym(c.dataset.s);
 });
-$("#newsFeed").addEventListener("click", e => {
-  const f = e.target.closest("[data-nff]"); if (f){ nfFilter = f.dataset.nff; save("nff", nfFilter); renderFeed(); return; }
-  if (e.target.closest("#nfMore")){ nfMore = !nfMore; renderFeed(); return; }
+function feedClick(e){
+  const f = e.target.closest("[data-nff]"); if (f){ nfFilter = f.dataset.nff; save("nff", nfFilter); renderFeed("#newsFeed"); renderFeed("#newsFull", true); return; }
+  const fs = e.target.closest("[data-nfsym]"); if (fs){ nfSym = fs.dataset.nfsym || null; renderFeed("#newsFull", true); return; }
   if (e.target.closest("details")) return;                       // Meldung auf- und zuklappen
   const it = e.target.closest("[data-newsopen]"); if (it){ dTab = "news"; save("dtab", dTab); openSym(it.dataset.newsopen); }
+}
+$("#newsFeed").addEventListener("click", feedClick);
+$("#newsFull").addEventListener("click", feedClick);
+$("#vHome").addEventListener("click", e => {
+  const hs = e.target.closest("[data-sethz]"); if (hs){ const k = hs.dataset.sethz; setHz({u: k[0], n: +k.slice(1)}); return; }
+  const r = e.target.closest(".mini[data-open], .tip-row[data-open]"); if (r) openSym(r.dataset.open);
 });
+document.addEventListener("click", e => { const v = e.target.closest("[data-view]"); if (v) setView(v.dataset.view); });
 $("#summary").addEventListener("click", e => { const t = e.target.closest("[data-open]"); if (t) openSym(t.dataset.open); });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && selected){ closeDetail(); return; }
-  if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".card[data-s], .tile[data-open]")){
+  if ((e.key === "Enter" || e.key === " ") && e.target.matches && e.target.matches(".card[data-s], .tile[data-open], .mini[data-open], .tip-row[data-open]")){
     e.preventDefault(); openSym(e.target.dataset.s || e.target.dataset.open);
   }
 });
