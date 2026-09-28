@@ -190,6 +190,32 @@ tr.grp td{background:var(--surface2);font:600 12px var(--cond);letter-spacing:.0
 .rbar .zero{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--muted)}
 .rbar .exp{position:absolute;top:-3px;width:3px;height:16px;border-radius:2px;transform:translateX(-1px)}
 tr.cur-h td{background:var(--accent-soft)}
+/* Firmen-Signet, Porträt, Begrüßung */
+.avatar{display:inline-grid;place-items:center;flex:none;border-radius:28%;background:linear-gradient(145deg,var(--co),color-mix(in srgb,var(--co) 70%,#000));color:#fff;font:700 1em/1 var(--cond);letter-spacing:.02em;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+@supports not (background:color-mix(in srgb,red 50%,blue)){.avatar{background:var(--co)}}
+.c-idw{display:flex;gap:11px;align-items:center;min-width:0}
+.card{gap:10px}
+.welcome{position:relative;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
+.welcome .w-text{padding:20px 22px}
+.welcome h2{margin:4px 0 6px;font-size:26px;letter-spacing:-.02em;line-height:1.15}
+.welcome p{margin:0 0 12px;color:var(--muted);max-width:52ch}
+.welcome .art{width:100%;height:auto;display:block;max-height:190px}
+.w-count{display:flex;gap:8px;flex-wrap:wrap}
+.w-count span{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font:600 13px var(--cond);letter-spacing:.02em}
+.w-av{display:flex;margin-top:14px}.w-av .avatar{margin-right:-8px;border:2px solid var(--surface)}
+@media (max-width:640px){.welcome{grid-template-columns:minmax(0,1fr)}.welcome .art{max-height:140px}}
+.portrait{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:20px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+.p-art{width:100%;height:auto;align-self:start}
+.p-title{margin:4px 0 8px;font-size:20px;letter-spacing:-.01em;text-transform:none;color:var(--text);font-family:var(--font)}
+.p-what{margin:0;max-width:72ch;line-height:1.6}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tag{padding:4px 10px;border-radius:999px;background:var(--surface2);font-size:13px;box-shadow:inset 0 0 0 1px var(--line)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 16px;margin:14px 0 0}
+.facts div{min-width:0}.facts dt{font:600 11px var(--cond);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}.facts dd{margin:2px 0 0;font-size:14px}
+.perf{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:8px;margin-top:14px}
+.pf{background:var(--surface2);border-radius:10px;padding:8px 10px}.pf span{display:block;font-size:11.5px;color:var(--muted)}.pf b{font-size:15px}
+@media (max-width:760px){.portrait{grid-template-columns:minmax(0,1fr)}.p-art{max-width:320px}}
+.dtitle{display:flex;gap:12px;align-items:center}
 footer.foot{color:var(--muted);font-size:12px;padding-block:28px 36px;text-align:center}
 </style>
 <div id="jsErr" class="banner" style="display:none;margin:12px 16px"></div>
@@ -241,6 +267,7 @@ footer.foot{color:var(--muted);font-size:12px;padding-block:28px 36px;text-align
   <div id="banner" class="banner" hidden><span id="bannerText"></span>
     <button class="btn" id="bannerDemo" type="button" hidden>Simulierte Kurse anzeigen</button></div>
   <section id="overview">
+    <div class="welcome" id="welcome"></div>
     <div class="summary" id="summary"></div>
     <div class="grid" id="grid"><div class="startup" id="startup">Das Dashboard startet …</div></div>
   </section>
@@ -691,6 +718,182 @@ function fcAccuracy(F, H){
 }
 
 // ---------------------------------------------------------------------
+// Kurzporträts (allgemeines Wissen, Stand 2026) und eigene Illustrationen
+// ---------------------------------------------------------------------
+const COMPANY = {
+  "NVDA": {name: "NVIDIA", short: "Grafikchips & KI-Rechenzentren", mono: "NV", color: "#4f9a1a", art: "chip", kind: "Aktie", sector: "Halbleiter",
+    what: "NVIDIA entwickelt Grafikprozessoren (GPUs) und ganze Rechensysteme. Ursprünglich für Computerspiele gebaut, sind die Chips heute der Standard, um große KI-Modelle zu trainieren und zu betreiben. Gefertigt werden sie bei Auftragsherstellern, NVIDIA selbst entwickelt Chips und Software.",
+    known: ["GeForce-Grafikkarten", "KI-Chips für Rechenzentren", "CUDA-Software-Plattform", "Chips für autonomes Fahren"], founded: "1993", hq: "Santa Clara, Kalifornien (USA)"},
+  "AAPL": {name: "Apple", short: "iPhone, Mac & Dienste", mono: "A", color: "#5f6b7a", art: "phone", kind: "Aktie", sector: "Unterhaltungselektronik & Software",
+    what: "Apple entwickelt Smartphones, Computer, Tablets und Wearables samt eigenem Betriebssystem und eigenen Chips. Einen wachsenden Teil verdient der Konzern mit Diensten rund um seine Geräte, etwa App Store, iCloud, Apple Music und Apple Pay.",
+    known: ["iPhone", "Mac & MacBook", "iPad", "Apple Watch & AirPods", "App Store"], founded: "1976", hq: "Cupertino, Kalifornien (USA)"},
+  "BTC/USD": {name: "Bitcoin", short: "Erste und größte Kryptowährung", mono: "₿", color: "#e8930c", art: "coin", kind: "Kryptowährung", sector: "Digitale Währung",
+    what: "Bitcoin ist eine dezentrale digitale Währung ohne Firma oder Zentralbank dahinter. Alle Überweisungen stehen in einer öffentlichen Blockchain, die Tausende Rechner weltweit gemeinsam führen. Die Menge ist auf 21 Millionen Bitcoin begrenzt; neue entstehen durch „Mining“.",
+    known: ["Blockchain", "Begrenzte Menge: 21 Mio.", "„Digitales Gold“", "Mining (Proof of Work)"], founded: "2009 (Start des Netzwerks)", hq: "dezentral, kein Firmensitz"},
+  "MSFT": {name: "Microsoft", short: "Software, Cloud & KI", mono: "MS", color: "#1f7fd1", art: "cloud", kind: "Aktie", sector: "Software & Cloud",
+    what: "Microsoft entwickelt Software für Privatleute und Unternehmen, betreibt mit Azure eine der größten Cloud-Plattformen und investiert stark in künstliche Intelligenz. Dazu gehören auch die Spielekonsole Xbox, das Berufsnetzwerk LinkedIn und die Entwicklerplattform GitHub.",
+    known: ["Windows", "Microsoft 365 / Office", "Azure-Cloud", "Xbox", "LinkedIn & GitHub"], founded: "1975", hq: "Redmond, Washington (USA)"},
+  "AMZN": {name: "Amazon", short: "Online-Handel & Cloud", mono: "a", color: "#d9800b", art: "cart", kind: "Aktie", sector: "Onlinehandel & Cloud",
+    what: "Amazon betreibt einen der größten Online-Marktplätze der Welt mit eigenem Logistiknetz. Besonders profitabel ist die Cloud-Sparte Amazon Web Services (AWS), die Rechenleistung an Firmen vermietet. Dazu kommen Prime-Abos, Streaming und Werbung.",
+    known: ["Amazon-Marktplatz", "Amazon Web Services (AWS)", "Prime & Prime Video", "Alexa & Echo", "Kindle"], founded: "1994", hq: "Seattle, Washington (USA)"},
+  "GOOGL": {name: "Alphabet (Google)", short: "Suche, YouTube & Werbung", mono: "G", color: "#3b78e7", art: "search", kind: "Aktie", sector: "Internet & Werbung",
+    what: "Alphabet ist die Muttergesellschaft von Google. Der Großteil des Umsatzes stammt aus Werbung in der Google-Suche und auf YouTube. Wichtige weitere Bereiche sind Google Cloud, das Smartphone-System Android, KI-Forschung (Google DeepMind) und selbstfahrende Autos (Waymo).",
+    known: ["Google-Suche", "YouTube", "Android", "Google Cloud", "Chrome & Gmail"], founded: "1998 (Google), 2015 (Alphabet)", hq: "Mountain View, Kalifornien (USA)"},
+  "META": {name: "Meta Platforms", short: "Soziale Netzwerke & VR", mono: "M", color: "#2f6fe0", art: "social", kind: "Aktie", sector: "Internet & Werbung",
+    what: "Meta betreibt einige der meistgenutzten Apps der Welt und verdient fast alles mit Werbung darin. Daneben investiert der Konzern in Virtual-Reality-Brillen und in eigene KI-Modelle.",
+    known: ["Facebook", "Instagram", "WhatsApp", "Quest-VR-Brillen", "Llama-KI-Modelle"], founded: "2004 (als Facebook)", hq: "Menlo Park, Kalifornien (USA)"},
+  "TSLA": {name: "Tesla", short: "Elektroautos & Energiespeicher", mono: "T", color: "#c0303a", art: "car", kind: "Aktie", sector: "Autoindustrie & Energie",
+    what: "Tesla baut Elektroautos und Batteriespeicher für Häuser und Stromnetze. Das Unternehmen betreibt ein eigenes Schnellladenetz und arbeitet an Software für autonomes Fahren und an Robotern. Die Aktie gilt als besonders schwankungsreich.",
+    known: ["Model 3 & Model Y", "Supercharger-Ladenetz", "Powerwall & Megapack", "Autopilot / autonomes Fahren", "Gigafactory Berlin-Brandenburg"], founded: "2003", hq: "Austin, Texas (USA)"},
+  "SAP": {name: "SAP", short: "Unternehmenssoftware aus Deutschland", mono: "SAP", color: "#1669c9", art: "software", kind: "Aktie (ADR in New York)", sector: "Unternehmenssoftware",
+    what: "SAP ist der größte Softwarekonzern Europas. Seine Programme steuern bei Unternehmen weltweit Finanzen, Einkauf, Lager, Produktion und Personal, zunehmend als Cloud-Dienst. Hier wird die Aktie als Hinterlegungsschein (ADR) an der Börse New York in US-Dollar gehandelt.",
+    known: ["ERP-Software S/4HANA", "Cloud-Geschäftssoftware", "Größter Softwarekonzern Europas", "DAX-Schwergewicht"], founded: "1972", hq: "Walldorf, Baden-Württemberg (Deutschland)"},
+  "AMD": {name: "AMD", short: "Prozessoren & KI-Chips", mono: "AMD", color: "#d4502d", art: "chip", kind: "Aktie", sector: "Halbleiter",
+    what: "AMD (Advanced Micro Devices) entwickelt Prozessoren für PCs und Server, Grafikkarten und KI-Beschleuniger. AMD-Chips stecken auch in den Spielkonsolen PlayStation 5 und Xbox Series. Wie NVIDIA lässt AMD seine Chips bei Auftragsherstellern fertigen.",
+    known: ["Ryzen-Prozessoren", "EPYC-Serverprozessoren", "Radeon-Grafikkarten", "Instinct-KI-Chips", "Chips für Spielkonsolen"], founded: "1969", hq: "Santa Clara, Kalifornien (USA)"},
+  "NFLX": {name: "Netflix", short: "Streaming von Serien & Filmen", mono: "N", color: "#b81d24", art: "film", kind: "Aktie", sector: "Medien & Streaming",
+    what: "Netflix ist einer der größten Streamingdienste der Welt. Das Unternehmen verdient mit Abos und zunehmend mit Werbung und produziert viele Serien und Filme selbst.",
+    known: ["Streaming-Abos", "Eigenproduktionen", "Günstigeres Abo mit Werbung"], founded: "1997", hq: "Los Gatos, Kalifornien (USA)"},
+  "ETH/USD": {name: "Ethereum", short: "Blockchain für Apps & Verträge", mono: "Ξ", color: "#5b6fd6", art: "coin", kind: "Kryptowährung", sector: "Digitale Währung",
+    what: "Ethereum ist eine Blockchain, auf der Programme laufen können, sogenannte Smart Contracts. Darauf bauen viele Krypto-Anwendungen, Tokens und digitale Sammlerstücke auf. Die Währung des Netzwerks heißt Ether.",
+    known: ["Smart Contracts", "Plattform für Tokens & Apps", "Proof of Stake seit 2022"], founded: "2015", hq: "dezentral, kein Firmensitz"},
+  "INTC": {name: "Intel", short: "Prozessoren & Chipfabriken", mono: "In", color: "#1a73c8", art: "chip", kind: "Aktie", sector: "Halbleiter",
+    what: "Intel entwickelt Prozessoren für PCs und Server und fertigt sie, anders als die meisten Konkurrenten, zum großen Teil in eigenen Fabriken. Das Unternehmen baut zudem eine Auftragsfertigung für andere Chipfirmen auf.",
+    known: ["Core-Prozessoren", "Xeon-Serverchips", "Eigene Chipfabriken"], founded: "1968", hq: "Santa Clara, Kalifornien (USA)"},
+  "KO": {name: "Coca-Cola", short: "Getränke-Marken weltweit", mono: "KO", color: "#c8232c", art: "drink", kind: "Aktie", sector: "Getränke",
+    what: "The Coca-Cola Company verkauft Getränkekonzentrate und Marken an Abfüller in fast allen Ländern der Welt. Neben Cola gehören viele Limonaden, Säfte, Wasser und Kaffee dazu. Die Aktie ist für stetige Dividenden bekannt.",
+    known: ["Coca-Cola", "Fanta & Sprite", "Lange Dividendentradition"], founded: "1892", hq: "Atlanta, Georgia (USA)"},
+  "DIS": {name: "Disney", short: "Filme, Freizeitparks & Streaming", mono: "D", color: "#23408e", art: "magic", kind: "Aktie", sector: "Medien & Unterhaltung",
+    what: "Disney ist ein Unterhaltungskonzern mit Filmstudios, Freizeitparks, Kreuzfahrten, Fernsehsendern und dem Streamingdienst Disney+. Zu Disney gehören unter anderem Pixar, Marvel und Star Wars.",
+    known: ["Disney-Filme & Figuren", "Freizeitparks", "Disney+", "Pixar, Marvel, Star Wars"], founded: "1923", hq: "Burbank, Kalifornien (USA)"},
+  "JPM": {name: "JPMorgan Chase", short: "Größte Bank der USA", mono: "JPM", color: "#6b5534", art: "bank", kind: "Aktie", sector: "Banken",
+    what: "JPMorgan Chase ist gemessen an der Bilanzsumme die größte Bank der USA. Sie ist im Privatkundengeschäft, bei Krediten für Firmen, im Investmentbanking und in der Vermögensverwaltung tätig.",
+    known: ["Chase-Privatkundenbank", "Investmentbanking", "Vermögensverwaltung"], founded: "2000 (Fusion, Wurzeln bis 1799)", hq: "New York (USA)"},
+};
+const genProfiles = load("profiles", {});   // von Claude erstellte Kurzporträts
+function profileOf(s){ return COMPANY[s] || genProfiles[s] || null; }
+function hueColor(s){ let h = 0; for (const ch of s) h = (h * 31 + ch.charCodeAt(0)) % 360; return `hsl(${h} 55% 45%)`; }
+const coColor = s => (COMPANY[s] && COMPANY[s].color) || hueColor(s);
+const coName = (s, d) => (COMPANY[s] && COMPANY[s].name) || (d && d.name) || NAMES[s] || s;
+const coShort = (s, d) => { const p = profileOf(s); return p && p.short ? p.short : (d && d.name) || NAMES[s] || ""; };
+function avatarHTML(s, size = 40){
+  const p = COMPANY[s], mono = p ? p.mono : s.replace(/[^A-Z0-9]/g, "").slice(0, 2) || s.slice(0, 2);
+  const fs = Math.round(size * (mono.length >= 3 ? 0.3 : mono.length === 2 ? 0.36 : 0.46));
+  return `<span class="avatar" aria-hidden="true" style="--co:${coColor(s)};width:${size}px;height:${size}px;font-size:${fs}px">${esc(mono)}</span>`;
+}
+// Illustrationen: eigene Zeichnungen, Farbe über currentColor (Firmenfarbe) und Design-Variablen
+const ART = {
+  chip: `<rect x="80" y="35" width="80" height="80" rx="10" fill="currentColor"/><rect x="95" y="50" width="50" height="50" rx="5" fill="var(--surface)" opacity=".9"/>
+    <path d="M105 60h30M105 70h30M105 80h30M105 90h30" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".6"/>
+    ${[45, 60, 75, 90, 105].map(y => `<path d="M62 ${y}h18M160 ${y}h18" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>`).join("")}
+    ${[92, 107, 122, 137, 148].map(x => `<path d="M${x} 17v18M${x} 115v18" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>`).join("")}
+    <circle cx="200" cy="30" r="6" fill="currentColor" opacity=".4"/><circle cx="40" cy="125" r="9" fill="currentColor" opacity=".25"/>`,
+  phone: `<rect x="40" y="55" width="110" height="70" rx="6" fill="var(--surface)" stroke="currentColor" stroke-width="4" opacity=".7"/><rect x="30" y="125" width="130" height="7" rx="3.5" fill="currentColor" opacity=".6"/>
+    <rect x="135" y="20" width="62" height="118" rx="12" fill="var(--surface)" stroke="currentColor" stroke-width="5"/><rect x="156" y="27" width="20" height="5" rx="2.5" fill="currentColor"/>
+    ${[0, 1, 2].map(r => [0, 1, 2].map(k => `<rect x="${145 + k * 15}" y="${42 + r * 17}" width="11" height="11" rx="3" fill="currentColor" opacity="${0.35 + 0.2 * ((r + k) % 3)}"/>`).join("")).join("")}`,
+  cloud: `<path d="M70 95a28 28 0 0 1 8-55 38 38 0 0 1 72 6 26 26 0 0 1 20 49z" fill="currentColor" opacity=".9"/>
+    <rect x="92" y="62" width="17" height="17" rx="2" fill="var(--surface)"/><rect x="112" y="62" width="17" height="17" rx="2" fill="var(--surface)" opacity=".8"/>
+    <rect x="92" y="82" width="17" height="10" rx="2" fill="var(--surface)" opacity=".8"/><rect x="112" y="82" width="17" height="10" rx="2" fill="var(--surface)" opacity=".6"/>
+    ${[0, 1, 2].map(k => `<rect x="${78 + k * 30}" y="${108 + (k % 2) * 4}" width="22" height="26" rx="3" fill="currentColor" opacity=".35"/><path d="M${89 + k * 30} 95v12" stroke="currentColor" stroke-width="3"/>`).join("")}`,
+  cart: `<rect x="120" y="40" width="70" height="60" rx="4" fill="currentColor" opacity=".85"/><path d="M120 58h70M155 40v18" stroke="var(--surface)" stroke-width="4"/>
+    <rect x="95" y="75" width="45" height="38" rx="3" fill="currentColor" opacity=".5"/><path d="M95 88h45" stroke="var(--surface)" stroke-width="3"/>
+    <path d="M30 45h16l14 55h62" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M52 62h70l-8 26H58" fill="currentColor" opacity=".25"/><circle cx="68" cy="116" r="8" fill="currentColor"/><circle cx="112" cy="116" r="8" fill="currentColor"/>`,
+  search: `<rect x="30" y="30" width="120" height="90" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="3" opacity=".8"/>
+    <path d="M45 52h70M45 66h90M45 80h60M45 94h80" stroke="currentColor" stroke-width="5" stroke-linecap="round" opacity=".35"/>
+    <circle cx="160" cy="72" r="32" fill="var(--surface)" stroke="currentColor" stroke-width="8"/><path d="M183 96l26 26" stroke="currentColor" stroke-width="11" stroke-linecap="round"/>
+    <path d="M151 60v24l20-12z" fill="currentColor"/>`,
+  social: `<path d="M60 50L120 80L185 45M120 80L95 125M120 80L175 115M60 50L95 125" stroke="currentColor" stroke-width="3" opacity=".4"/>
+    <circle cx="120" cy="80" r="20" fill="currentColor"/><circle cx="60" cy="50" r="13" fill="currentColor" opacity=".7"/><circle cx="185" cy="45" r="15" fill="currentColor" opacity=".6"/>
+    <circle cx="95" cy="125" r="11" fill="currentColor" opacity=".55"/><circle cx="175" cy="115" r="13" fill="currentColor" opacity=".75"/>
+    <path d="M150 15h50a8 8 0 0 1 8 8v18a8 8 0 0 1-8 8h-32l-12 10v-10h-6a8 8 0 0 1-8-8V23a8 8 0 0 1 8-8z" fill="var(--surface)" stroke="currentColor" stroke-width="3"/>
+    <path d="M160 29h38M160 37h24" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity=".6"/>`,
+  car: `<path d="M25 100c0-12 8-18 20-20l30-22c6-4 12-6 20-6h45c10 0 18 4 25 11l18 17c14 2 22 8 22 20v8H25z" fill="currentColor"/>
+    <path d="M82 64h28v18H66zM118 64h22c6 0 10 2 14 6l10 12h-46z" fill="var(--surface)" opacity=".85"/>
+    <circle cx="68" cy="110" r="15" fill="var(--text)"/><circle cx="68" cy="110" r="6" fill="var(--surface)"/><circle cx="172" cy="110" r="15" fill="var(--text)"/><circle cx="172" cy="110" r="6" fill="var(--surface)"/>
+    <path d="M200 20l-14 24h12l-8 22 20-30h-12l8-16z" fill="currentColor" opacity=".8"/>`,
+  coin: `${[0, 1, 2, 3].map(k => `<ellipse cx="70" cy="${118 - k * 13}" rx="36" ry="11" fill="currentColor" opacity="${0.35 + k * 0.15}"/>`).join("")}
+    <circle cx="150" cy="68" r="42" fill="currentColor"/><circle cx="150" cy="68" r="32" fill="none" stroke="var(--surface)" stroke-width="4" opacity=".7"/>
+    <path d="M140 50v36M150 50v36M136 54h20a8 8 0 0 1 0 16h-20M136 70h22a8 8 0 0 1 0 16h-22" fill="none" stroke="var(--surface)" stroke-width="5" stroke-linecap="round"/>
+    ${[0, 1, 2].map(k => `<rect x="${196}" y="${20 + k * 38}" width="26" height="26" rx="4" fill="none" stroke="currentColor" stroke-width="3"/>`).join("")}<path d="M209 46v12M209 84v12" stroke="currentColor" stroke-width="3"/>`,
+  software: `<rect x="25" y="22" width="150" height="104" rx="8" fill="var(--surface)" stroke="currentColor" stroke-width="4"/><path d="M25 42h150" stroke="currentColor" stroke-width="4"/>
+    <circle cx="37" cy="32" r="3" fill="currentColor"/><circle cx="47" cy="32" r="3" fill="currentColor"/>
+    ${[[45, 40], [65, 60], [85, 30], [105, 70], [125, 50]].map(([x, h]) => `<rect x="${x}" y="${112 - h}" width="13" height="${h}" rx="2" fill="currentColor" opacity=".75"/>`).join("")}
+    <ellipse cx="200" cy="60" rx="22" ry="8" fill="currentColor"/><path d="M178 60v50c0 5 10 9 22 9s22-4 22-9V60" fill="currentColor" opacity=".55"/><path d="M178 78c0 5 10 9 22 9s22-4 22-9M178 95c0 5 10 9 22 9s22-4 22-9" fill="none" stroke="var(--surface)" stroke-width="3"/>`,
+  film: `<rect x="30" y="35" width="180" height="80" rx="6" fill="currentColor"/>${[0, 1, 2, 3, 4, 5, 6, 7].map(k => `<rect x="${38 + k * 22}" y="41" width="12" height="9" rx="2" fill="var(--surface)"/><rect x="${38 + k * 22}" y="100" width="12" height="9" rx="2" fill="var(--surface)"/>`).join("")}
+    <path d="M108 60v30l26-15z" fill="var(--surface)"/>`,
+  drink: `<path d="M95 20h30v18c0 8 14 14 14 34v58a8 8 0 0 1-8 8h-42a8 8 0 0 1-8-8V72c0-20 14-26 14-34z" fill="currentColor"/>
+    <rect x="93" y="12" width="34" height="10" rx="3" fill="currentColor" opacity=".7"/><path d="M81 88h58v18H81z" fill="var(--surface)" opacity=".85"/>
+    <path d="M160 70h40l-6 62h-28z" fill="currentColor" opacity=".35"/>${[[172, 110], [184, 96], [178, 84], [188, 118]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3" fill="var(--surface)"/>`).join("")}`,
+  magic: `<path d="M50 130V80l15-15 15 15v50zM95 130V60l25-30 25 30v70zM160 130V75l15-15 15 15v55z" fill="currentColor" opacity=".85"/>
+    <path d="M95 60l25-30 25 30z" fill="currentColor"/><rect x="112" y="100" width="16" height="30" rx="8" fill="var(--surface)"/>
+    ${[[40, 30, 5], [200, 25, 7], [175, 45, 4], [60, 50, 3]].map(([x, y, r]) => `<path d="M${x} ${y - r * 2}l${r * 0.6} ${r * 1.4} ${r * 1.4} ${r * 0.6}-${r * 1.4} ${r * 0.6}-${r * 0.6} ${r * 1.4}-${r * 0.6}-${r * 1.4}-${r * 1.4}-${r * 0.6} ${r * 1.4}-${r * 0.6}z" fill="currentColor" opacity=".6"/>`).join("")}`,
+  bank: `<path d="M120 15l85 38H35z" fill="currentColor"/><rect x="40" y="57" width="160" height="8" fill="currentColor" opacity=".7"/>
+    ${[55, 85, 115, 145, 175].map(x => `<rect x="${x}" y="70" width="12" height="50" rx="2" fill="currentColor" opacity=".6"/>`).join("")}<rect x="32" y="122" width="176" height="12" rx="2" fill="currentColor"/>`,
+  market: `${[[20, 60], [45, 85], [70, 50], [95, 100], [120, 75], [145, 115], [170, 90], [195, 130]].map(([x, h], i) => `<rect x="${x}" y="${145 - h}" width="18" height="${h}" rx="3" fill="currentColor" opacity="${0.25 + (i % 3) * 0.15}"/>`).join("")}
+    <path d="M10 110L50 95L80 105L115 70L150 78L185 40L225 22" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="225" cy="22" r="7" fill="currentColor"/>`,
+  generic: `${[[40, 70, 95, 1], [65, 55, 85, 0], [90, 60, 100, 1], [115, 40, 80, 1], [140, 50, 75, 0], [165, 30, 65, 1], [190, 20, 55, 1]].map(([x, top, bot, u]) => `<path d="M${x + 6} ${top - 10}v${bot - top + 20}" stroke="currentColor" stroke-width="2"/><rect x="${x}" y="${top}" width="12" height="${bot - top}" rx="2" fill="currentColor" opacity="${u ? 0.9 : 0.4}"/>`).join("")}`,
+};
+const artSVG = (key, color, cls = "art") => `<svg class="${cls}" viewBox="0 0 240 150" role="img" aria-hidden="true" style="color:${color}"><rect width="240" height="150" rx="14" fill="currentColor" opacity=".1"/>${ART[key] || ART.generic}</svg>`;
+
+// Wertentwicklung aus den Tageskursen
+function perfStats(d){
+  const c = d.F.c, n = c.length, k = d.crypto ? 365 / 252 : 1;
+  const per = t => { const b = Math.round(t * k); return n > b ? c[n - 1] / c[n - 1 - b] - 1 : null; };
+  let peak = -Infinity, mdd = 0;
+  for (const x of c.slice(-Math.round(252 * k))){ peak = Math.max(peak, x); mdd = Math.min(mdd, x / peak - 1); }
+  const sd = d.F.sd[n - 1];
+  return {w1: per(5), m1: per(21), m3: per(63), y1: per(252), mdd, vol: sd ? sd * Math.sqrt(d.crypto ? 365 : 252) : null};
+}
+let sampleFn = null, genBusy = null;
+function portraitHTML(s, d){
+  const p = profileOf(s), color = coColor(s), ps = perfStats(d);
+  const chip = (l, v) => `<div class="pf"><span>${l}</span><b class="num ${v == null ? "" : v >= 0 ? "up" : "down"}">${sp(v)}</b></div>`;
+  const perf = `<div class="perf">${chip("1 Woche", ps.w1)}${chip("1 Monat", ps.m1)}${chip("3 Monate", ps.m3)}${chip("1 Jahr", ps.y1)}
+    <div class="pf"><span>Größter Rückgang (1 J.)</span><b class="num down">${sp(ps.mdd)}</b></div><div class="pf"><span>Schwankung p. a.</span><b class="num">${pc(ps.vol)}</b></div></div>`;
+  if (!p){
+    return `<section class="portrait" style="--co:${color}">${artSVG("generic", color, "art p-art")}<div class="p-body">
+      <div class="eyebrow">${esc(d.exchange || "Wertpapier")}</div><h3 class="p-title">${esc(coName(s, d))}</h3>
+      <p>Für ${esc(s)} gibt es noch kein Kurzporträt.${sampleFn ? " Claude kann eins schreiben (nutzt dein Claude-Kontingent, beim ersten Mal fragt Claude um Erlaubnis)." : ""}</p>
+      ${sampleFn ? `<button class="btn" type="button" data-genprof="${esc(s)}" ${genBusy ? "disabled" : ""}>${genBusy === s ? "Claude schreibt …" : "Kurzporträt von Claude schreiben lassen"}</button>` : ""}
+      <div class="fine" id="genMsg"></div>${perf}</div></section>`;
+  }
+  return `<section class="portrait" style="--co:${color}">${artSVG(p.art || "generic", color, "art p-art")}<div class="p-body">
+    <div class="eyebrow">${esc(p.kind || "Aktie")} · ${esc(p.sector || "")}</div>
+    <h3 class="p-title">${esc(p.short || coName(s, d))}</h3>
+    <p class="p-what">${esc(p.what || "")}</p>
+    ${p.known && p.known.length ? `<div class="eyebrow" style="margin-top:10px">Bekannt für</div><div class="tags">${p.known.map(k => `<span class="tag">${esc(k)}</span>`).join("")}</div>` : ""}
+    <dl class="facts">
+      ${p.founded ? `<div><dt>Gegründet</dt><dd>${esc(p.founded)}</dd></div>` : ""}${p.hq ? `<div><dt>Sitz</dt><dd>${esc(p.hq)}</dd></div>` : ""}
+      ${p.sector ? `<div><dt>Branche</dt><dd>${esc(p.sector)}</dd></div>` : ""}<div><dt>Gehandelt</dt><dd>${esc(d.exchange || "–")} · ${esc(d.currency || "")}</dd></div></dl>
+    ${perf}
+    <div class="fine">${COMPANY[s] ? "Kurzporträt: allgemeines Wissen, Stand 2026, keine Live-Daten." : "Kurzporträt von Claude erstellt, kann Fehler enthalten."} Wertentwicklung aus den echten Kursdaten.</div>
+  </div></section>`;
+}
+async function generateProfile(s){
+  if (!sampleFn || genBusy) return;
+  const d = data[s]; genBusy = s; render();
+  try{
+    const r = await sampleFn.json(`Schreibe ein kurzes, sachliches Kurzporträt auf Deutsch für das Wertpapier mit dem Börsensymbol "${s}" (Name laut Kursdaten: "${d ? d.name : s}", Handelsplatz: "${d ? d.exchange : ""}").
+Antworte nur mit einem JSON-Objekt in dieser Form:
+{"short": "Stichwort-Beschreibung, höchstens 5 Wörter", "what": "2 bis 3 Sätze: was die Firma macht", "known": ["bis zu 5 kurze Stichworte, wofür sie bekannt ist"], "founded": "Gründungsjahr oder leer", "hq": "Stadt, Land oder leer", "sector": "Branche", "kind": "Aktie oder ETF oder Kryptowährung"}
+Wenn du das Wertpapier nicht sicher kennst, setze "what" auf "unbekannt" und lasse die übrigen Felder leer. Nenne keine Kurse, Kursziele, Umsatzzahlen oder Anlageempfehlungen.`, {modelTier: "default", cache: {gcTime: 86400000}});
+    if (!r || typeof r.what !== "string" || /^unbekannt/i.test(r.what)) throw {code: "unknown"};
+    const art = /halbleiter|chip/i.test(r.sector) ? "chip" : /krypto/i.test(r.kind || r.sector) ? "coin" : /bank|finanz|versicher/i.test(r.sector) ? "bank" : /software|cloud/i.test(r.sector) ? "software" : /auto|fahrzeug/i.test(r.sector) ? "car" : /handel|retail/i.test(r.sector) ? "cart" : /medien|unterhaltung|stream/i.test(r.sector) ? "film" : /getränk|lebensmittel/i.test(r.sector) ? "drink" : "generic";
+    genProfiles[s] = {short: String(r.short || "").slice(0, 60), what: String(r.what).slice(0, 600), known: (Array.isArray(r.known) ? r.known : []).slice(0, 5).map(x => String(x).slice(0, 40)),
+      founded: String(r.founded || "").slice(0, 40), hq: String(r.hq || "").slice(0, 60), sector: String(r.sector || "").slice(0, 50), kind: String(r.kind || "Aktie").slice(0, 30), art};
+    save("profiles", genProfiles);
+    genBusy = null; render();
+  }catch(e){
+    genBusy = null; render();
+    const msg = {unknown: "Claude kennt dieses Wertpapier nicht sicher genug für ein Porträt.", not_granted: "Die Seite darf Claude nicht nutzen (Erlaubnis abgelehnt).", rate_limited: "Gerade zu viele Anfragen. Bitte später noch einmal versuchen.",
+      invalid_json: "Die Antwort ließ sich nicht lesen. Bitte noch einmal versuchen."}[e && e.code] || "Das Porträt konnte gerade nicht erstellt werden. Bitte später noch einmal versuchen.";
+    if (e && ["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(e.code)) sampleFn = null;
+    const m = document.getElementById("genMsg"); if (m) m.textContent = msg;
+  }
+}
+
+// ---------------------------------------------------------------------
 // Status, Hinweise, Fehler
 // ---------------------------------------------------------------------
 function updateNote(){
@@ -749,14 +952,14 @@ const prioBtn = s => { const v = prioOf(s); return `<button class="rm pb p${v}" 
 const rmBtn = s => `<button class="rm" type="button" data-rm="${esc(s)}" aria-label="${esc(s)} entfernen" title="Entfernen">×</button>`;
 function cardHTML(s){
   const d = data[s];
-  if (!d) return `<div class="card pending" data-s="${esc(s)}"><div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div><div class="nm">${esc(NAMES[s] || "")}</div></div>${rmBtn(s)}</div><div class="wait">wartet auf Kursdaten …</div></div>`;
-  if (d.error) return `<div class="card err" data-s="${esc(s)}"><div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div></div>${rmBtn(s)}</div><div class="errtxt">${esc(d.error)}</div></div>`;
+  if (!d) return `<div class="card pending" data-s="${esc(s)}"><div class="c-head"><div class="c-idw">${avatarHTML(s)}<div class="c-id"><div class="sym">${esc(s)}</div><div class="nm">${esc(coShort(s))}</div></div></div>${rmBtn(s)}</div><div class="wait">wartet auf Kursdaten …</div></div>`;
+  if (d.error) return `<div class="card err" data-s="${esc(s)}"><div class="c-head"><div class="c-idw">${avatarHTML(s)}<div class="c-id"><div class="sym">${esc(s)}</div></div></div>${rmBtn(s)}</div><div class="errtxt">${esc(d.error)}</div></div>`;
   const f = fcFor(s);
   let flash = "";
   if (lastPrice[s] != null && lastPrice[s] !== d.price) flash = d.price > lastPrice[s] ? "flash-up" : "flash-down";
   lastPrice[s] = d.price;
   return `<div class="card ${flash}" role="button" tabindex="0" data-s="${esc(s)}" aria-label="${esc(d.name)}: Details öffnen">
-    <div class="c-head"><div class="c-id"><div class="sym">${esc(s)}</div><div class="nm" title="${esc(d.name)}">${esc(d.name)}</div></div>
+    <div class="c-head"><div class="c-idw">${avatarHTML(s)}<div class="c-id"><div class="sym">${esc(coName(s, d))} <span class="muted" style="font-weight:500;font-size:12px">${esc(s)}</span></div><div class="nm" title="${esc(d.name)}">${esc(coShort(s, d))}</div></div></div>
       <div class="c-right"><span class="pill ${pillCls(tipLabel(f))}">${esc(tipLabel(f))}</span>${prioBtn(s)}${rmBtn(s)}</div></div>
     <div class="c-price"><span class="px num">${nf(d.price)}</span><span class="cur">${esc(d.currency)}</span><span class="chg num ${d.change >= 0 ? "up" : "down"}">${sp(d.changePct / 100, 2)}</span></div>
     <canvas class="spark" data-spark="${esc(s)}" aria-hidden="true"></canvas>
@@ -766,16 +969,21 @@ function cardHTML(s){
 }
 function renderSummary(){
   const ds = symbols.filter(ready).map(s => data[s]);
-  if (!ds.length){ $("#summary").innerHTML = ""; return; }
+  if (!ds.length){ $("#summary").innerHTML = ""; $("#welcome").innerHTML = ""; return; }
   const tips = ds.map(d => fcFor(d.symbol)), nb = tips.filter(f => f && f.tip && f.dirF > 0).length, ns = tips.filter(f => f && f.tip && f.dirF < 0).length, nn = ds.length - nb - ns;
   const fcs = ds.map(d => [d, fcFor(d.symbol)]).filter(x => x[1]).sort((a, b) => b[1].exp - a[1].exp);
   const bdf = fcs[0], wdf = fcs[fcs.length - 1];
   const t = (label, d, f) => `<div class="tile" data-open="${esc(d.symbol)}" role="button" tabindex="0"><div class="eyebrow">${label} · ${esc(hzLabel(hz))}</div>
-    <div class="t-val">${esc(d.symbol)} <b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b></div><div class="t-sub">${esc(d.name)} · Anstieg ${pc(f.pUp)}</div></div>`;
+    <div class="t-val" style="display:flex;gap:8px;align-items:center">${avatarHTML(d.symbol, 26)}${esc(coName(d.symbol, d))} <b class="num ${f.exp >= 0 ? "up" : "down"}">${sp(f.exp, hz.u === "h" ? 2 : 1)}</b></div><div class="t-sub">${esc(d.name)} · Anstieg ${pc(f.pUp)}</div></div>`;
+  const tipSyms = ds.filter(d => { const f = fcFor(d.symbol); return f && f.tip; }).map(d => d.symbol);
+  const now = new Date(), hour = now.getHours(), greet = hour < 11 ? "Guten Morgen" : hour < 18 ? "Guten Tag" : "Guten Abend";
+  $("#welcome").innerHTML = `<div class="w-text"><div class="eyebrow">${esc(now.toLocaleDateString("de-DE", {weekday: "long", day: "numeric", month: "long"}))}</div>
+      <h2>${greet}! Dein Marktüberblick</h2>
+      <p>${tipSyms.length ? `Für ${esc(hzLabel(hz))} gibt es ${tipSyms.length === 1 ? "einen verlässlichen Tipp" : tipSyms.length + " verlässliche Tipps"}. Alle anderen Werte sind gerade nicht sicher genug bestimmbar.` : `Für ${esc(hzLabel(hz))} lässt sich gerade bei keinem Wert die Richtung sicher genug bestimmen. Probier einen anderen Zeitraum.`}</p>
+      <div class="w-count"><span style="background:var(--up-soft);color:var(--up)">${nb} × Kaufen</span><span style="background:var(--down-soft);color:var(--down)">${ns} × Verkaufen</span><span style="background:var(--surface2);color:var(--muted)">${nn} × kein Tipp</span></div>
+      ${tipSyms.length ? `<div class="w-av">${tipSyms.slice(0, 8).map(s => avatarHTML(s, 30)).join("")}</div>` : ""}</div>
+    ${artSVG("market", "var(--accent)")}`;
   $("#summary").innerHTML = `
-    <div class="tile"><div class="eyebrow">Tipps · ${esc(hzLabel(hz))}</div>
-      <div class="t-val"><span class="up">${nb} × Kaufen</span> · <span class="down">${ns} × Verkaufen</span> · <span class="muted">${nn} × kein Tipp</span></div>
-      <div class="sbar" style="display:flex"><i style="width:${100 * nb / ds.length}%;background:var(--up)"></i><i style="width:${100 * ns / ds.length}%;background:var(--down)"></i><i style="width:${100 * nn / ds.length}%;background:var(--line)"></i></div></div>
     ${bdf ? t("Beste Prognose", bdf[0], bdf[1]) : `<div class="tile"><div class="eyebrow">Prognose · ${esc(hzLabel(hz))}</div><div class="t-val muted">lädt Stundenkerzen …</div></div>`}${fcs.length > 1 ? t("Schwächste Prognose", wdf[0], wdf[1]) : ""}
     <div class="tile"><div class="eyebrow">${mode === "demo" ? "Datenquelle" : "Twelve Data heute"}</div>
       <div class="t-val num">${mode === "demo" ? "Simulation" : usedToday() + " / " + DAY_LIMIT}</div><div class="t-sub">${mode === "demo" ? "keine echten Kurse" : "Abfragen verbraucht"}</div></div>`;
@@ -925,8 +1133,9 @@ function renderDetail(){
     <div class="dnav"><button class="btn ghost" type="button" id="backBtn">← Übersicht</button>
       <span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="eyebrow">Priorität</span><span class="prioseg">${[2, 1, 0].map(v => `<button type="button" class="chip ${prioOf(selected) === v ? "on" : ""}" data-setprio="${v}">${PRIO[v].name}</button>`).join("")}</span>
       <button class="btn ghost" type="button" id="rmDetail">Aus Liste entfernen</button></span></div>
-    <div class="dhead"><div><h2>${esc(d.name)}</h2><div class="dsub">${esc(d.symbol)}${d.exchange ? " · " + esc(d.exchange) : ""} · Letzter Kurs ${esc(time)}</div></div>
+    <div class="dhead"><div class="dtitle">${avatarHTML(selected, 56)}<div><h2>${esc(coName(selected, d))}</h2><div class="dsub">${esc(d.symbol)}${d.exchange ? " · " + esc(d.exchange) : ""} · Letzter Kurs ${esc(time)}</div></div></div>
       <div class="dprice"><span class="px num">${nf(d.price)}</span> <span class="cur">${esc(d.currency)}</span><div class="num ${d.change >= 0 ? "up" : "down"}">${d.change >= 0 ? "+" : "−"}${nf(Math.abs(d.change))} (${sp(d.changePct / 100, 2)})</div></div></div>
+    ${portraitHTML(selected, d)}
     <div class="hero ${!f0 || !f0.tip ? "dir-none" : f0.dirF > 0 ? "dir-up" : "dir-down"}">
       <div><div class="eyebrow">Tipp · ${esc(hzLabel(hz))}</div>
         <div class="h-title">${!f0 ? "Tipp wird berechnet …" : !f0.tip ? "Kein klarer Tipp" : f0.dirF > 0 ? "Kaufen ist besser" : "Verkaufen ist besser"}</div>
@@ -994,6 +1203,7 @@ document.addEventListener("keydown", e => {
 });
 $("#detail").addEventListener("click", e => {
   if (e.target.closest("#backBtn")) return closeDetail();
+  const gp = e.target.closest("[data-genprof]"); if (gp){ generateProfile(gp.dataset.genprof); return; }
   if (e.target.closest("#rmDetail")) return removeSym(selected);
   const sp_ = e.target.closest("[data-setprio]"); if (sp_){ setPrio(selected, +sp_.dataset.setprio); return; }
   const dt = e.target.closest("[data-dtab]"); if (dt){ dTab = dt.dataset.dtab; save("dtab", dTab); renderDetail(); return; }
@@ -1799,6 +2009,7 @@ function drawChart(cv, o){
   }
 }
 
+if (window.claude && window.claude.use) window.claude.use("sample").then(fn => { sampleFn = fn || null; if (sampleFn && selected) render(); }).catch(() => {});
 (async () => {
   try{ mcp = window.claude && window.claude.use ? await window.claude.use("mcp") : null; }catch(e){ mcp = null; }
   if (!mcp){ startDemo("Twelve Data ist in dieser Ansicht nicht verfügbar, deshalb werden simulierte Kurse angezeigt."); return; }
