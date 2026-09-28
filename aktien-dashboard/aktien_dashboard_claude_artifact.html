@@ -595,11 +595,15 @@ async function tick(force){
     await Promise.all(jobs);
     // 1b) Stundenkerzen für Stunden-Prognosen (höchstens eine Abfrage pro Takt)
     if (budgetOK()){ const si = nextIntra(); if (si) await guardedIntra(si); }
-    // 1c) Unternehmensmeldungen: höchstens eine Abfrage pro Takt und nur mit freier Kapazität
-    if (budgetOK() && callTimes.length <= 3 && usedToday() < DAY_LIMIT - DAY_RESERVE){ const sn = nextNews(); if (sn) await loadNews(sn); }
+    // 1c) Unternehmensmeldungen: wenn fällig, jeden zweiten Takt anstelle des Live-Kurses
+    let newsDone = false;
+    if (!force && budgetOK() && usedToday() < DAY_LIMIT - DAY_RESERVE){
+      const sn = nextNews();
+      if (sn && (newsTurn = !newsTurn)){ await loadNews(sn); newsDone = true; }
+    }
     // 2) ein Live-Kurs reihum (oder der ausgewählte Wert bei "Jetzt aktualisieren")
     const ready = symbols.every(s => store[s] && (store[s].candles || store[s].error));
-    if (ready && budgetOK() && usedToday() < DAY_LIMIT - DAY_RESERVE){
+    if (ready && !newsDone && budgetOK() && usedToday() < DAY_LIMIT - DAY_RESERVE){
       const f = force && store[force] && store[force].candles ? force : null;
       const s = f || nextLive();
       if (s){ lastLive = s; await guarded(s, () => loadQuote(s)); }
@@ -997,7 +1001,8 @@ Wenn du das Wertpapier nicht sicher kennst, setze "what" auf "unbekannt" und las
 // ---------------------------------------------------------------------
 // Neuigkeiten: Kursereignisse aus den Kursdaten + Meldungen von Twelve Data
 // ---------------------------------------------------------------------
-const NEWS_AGE = 6 * 3600e3;                 // Meldungen je Wert höchstens alle 6 Stunden abfragen
+const NEWS_AGE = 6 * 3600e3;
+let newsTurn = false;                 // Meldungen je Wert höchstens alle 6 Stunden abfragen
 const newsStore = load("news", {});           // Symbol -> {t, items, err}
 let events = load("events", []);              // [{id, sym, t, kind, title, text}]
 const tipMem = load("tipmem", {});
@@ -1038,8 +1043,10 @@ async function loadNews(s){
   }catch(err){
     if (err && err.code === "api"){
       if (err.kind !== "minute" && err.kind !== "day") Object.assign(e, {t: Date.now(), items: [], err: err.kind === "plan" ? "Meldungen gibt es für diesen Wert erst im bezahlten Twelve-Data-Tarif." : err.message});
+    } else if (err && ["not_in_manifest", "blocked_by_policy", "approval_required"].includes(err.code)){
+      Object.assign(e, {t: Date.now(), items: [], err: "Die Seite darf Meldungen gerade nicht abrufen (Zugriff nicht erlaubt). Neu laden fragt erneut."});
     } else if (err && (FATAL[err.code] || NO_MCP[err.code])) handleError(s, err);
-    else Object.assign(e, {t: Date.now() - NEWS_AGE + 15 * 60e3, items: e.items || [], err: "Meldungen gerade nicht erreichbar, neuer Versuch in 15 Minuten."});
+    else Object.assign(e, {t: Date.now() - NEWS_AGE + 15 * 60e3, items: e.items || [], err: "Meldungen gerade nicht erreichbar (" + ((err && (err.message || err.code)) || "unbekannter Fehler") + "), neuer Versuch in 15 Minuten."});
   }finally{ e.loading = false; saveNews(); }
 }
 function nextNews(){
