@@ -1311,11 +1311,23 @@ function demoRaw(sym){
 // =====================================================================
 // Indikatoren (Arrays, null = noch nicht definiert)
 // =====================================================================
-const fmt = (x, d = 2) => x == null || !isFinite(x) ? "–" : x.toLocaleString("de-DE", {minimumFractionDigits: d, maximumFractionDigits: d});
+const NUMF = {};
+const fmt = (x, d = 2) => x == null || !isFinite(x) ? "–" : (NUMF[d] = NUMF[d] || new Intl.NumberFormat("de-DE", {minimumFractionDigits: d, maximumFractionDigits: d})).format(x);
 const last = (v, k = 1) => v.length >= k ? v[v.length - k] : null;
 const sub = (a, b) => a.map((x, i) => x != null && b[i] != null ? x - b[i] : null);
-const rmax = (v, n) => v.map((_, i) => i >= n - 1 ? Math.max(...v.slice(i - n + 1, i + 1)) : null);
-const rmin = (v, n) => v.map((_, i) => i >= n - 1 ? Math.min(...v.slice(i - n + 1, i + 1)) : null);
+// gleitendes Maximum/Minimum in linearer Zeit (monotone Warteschlange)
+function rext(v, n, isMax){
+  const out = new Array(v.length).fill(null), q = [];
+  let head = 0;
+  for (let i = 0; i < v.length; i++){
+    while (q.length > head && (isMax ? v[q[q.length - 1]] <= v[i] : v[q[q.length - 1]] >= v[i])) q.pop();
+    q.push(i);
+    if (q[head] <= i - n) head++;
+    if (i >= n - 1) out[i] = v[q[head]];
+  }
+  return out;
+}
+const rmax = (v, n) => rext(v, n, true), rmin = (v, n) => rext(v, n, false);
 
 function sma(v, n){
   const o = Array(v.length).fill(null);
@@ -1417,7 +1429,7 @@ function supertrend(h, l, c, n = 10, mult = 3){
 }
 
 // =====================================================================
-// Analyse: ~70 Indikatoren als Signal-Reihen (-1 … +1) -> gewichtete
+// Analyse: über 100 Indikatoren als Signal-Reihen (-1 … +1) -> gewichtete
 // Bewertung -> Rückblick-Test (walk-forward) -> Tipp
 // =====================================================================
 const G_MA = "Gleitende Durchschnitte", G_OS = "Oszillatoren", G_TR = "Trend", G_VT = "Volatilität", G_VO = "Volumen", G_PA = "Muster";
@@ -1776,6 +1788,221 @@ function analyze(raw){
       srNow.res == null && srNow.hadH ? "über allen Widerständen der letzten 6 Monate" : srNow.sup == null && srNow.hadL ? "unter allen Unterstützungen der letzten 6 Monate"
       : last(sr) > 0 ? "näher an der Unterstützung (Luft nach oben)" : "näher am Widerstand (wenig Luft nach oben)");
 
+  // =================== Zusätzliche Indikatoren ===================
+  // --- Gleitende Durchschnitte ---
+  const wma20 = wma(c, 20);
+  def(G_MA, "trend", "WMA (20)", series(n, i => dist(wma20[i], i)), fmt(last(wma20)), `Kurs ${pos(price - last(wma20))}`);
+  const alma = Array(n).fill(null);
+  { const w = 9, off = 0.85 * (w - 1), sg = w / 6, ws = []; let wsum = 0;
+    for (let k = 0; k < w; k++){ const x = Math.exp(-((k - off) ** 2) / (2 * sg * sg)); ws.push(x); wsum += x; }
+    for (let i = w - 1; i < n; i++){ let s = 0; for (let k = 0; k < w; k++) s += ws[k] * c[i - w + 1 + k]; alma[i] = s / wsum; } }
+  def(G_MA, "trend", "ALMA (9)", series(n, i => dist(alma[i], i)), fmt(last(alma)), `Kurs ${pos(price - last(alma))}`);
+  const zl = ema(c.map((x, i) => i >= 9 ? 2 * x - c[i - 9] : null), 20);
+  def(G_MA, "trend", "ZLEMA (20)", series(n, i => dist(zl[i], i)), fmt(last(zl)), `Kurs ${pos(price - last(zl))}`);
+  const t3 = (() => {
+    const a = 0.7, e1 = ema(c, 5), e2 = ema(e1, 5), e3 = ema(e2, 5), e4 = ema(e3, 5), e5 = ema(e4, 5), e6 = ema(e5, 5);
+    const c1 = -(a ** 3), c2 = 3 * a * a + 3 * a ** 3, c3 = -6 * a * a - 3 * a - 3 * a ** 3, c4 = 1 + 3 * a + a ** 3 + 3 * a * a;
+    return series(n, i => nn(e3[i], e4[i], e5[i], e6[i]) ? c1 * e6[i] + c2 * e5[i] + c3 * e4[i] + c4 * e3[i] : null);
+  })();
+  def(G_MA, "trend", "T3 (5)", series(n, i => nn(t3[i], t3[i - 1], A[i]) && A[i] ? clamp1((t3[i] - t3[i - 1]) / (0.2 * A[i])) : null),
+      fmt(last(t3)), last(t3) > last(t3, 2) ? "steigend" : "fallend");
+  const mcg = Array(n).fill(null);
+  { let m = c[0]; for (let i = 1; i < n; i++){ m = m + (c[i] - m) / (14 * Math.pow(c[i] / m, 4)); if (i >= 14) mcg[i] = m; } }
+  def(G_MA, "trend", "McGinley Dynamic (14)", series(n, i => dist(mcg[i], i)), fmt(last(mcg)), `Kurs ${pos(price - last(mcg))}`);
+  const [ls25] = linreg(c, 25), s25 = sma(c, 25), lsma = series(n, i => nn(ls25[i], s25[i]) ? s25[i] + ls25[i] * 12 : null);
+  def(G_MA, "trend", "LSMA (25)", series(n, i => dist(lsma[i], i)), fmt(last(lsma)), `Kurs ${pos(price - last(lsma))}`);
+  const smma = rma(c, 20);
+  def(G_MA, "trend", "SMMA (20)", series(n, i => dist(smma[i], i)), fmt(last(smma)), `Kurs ${pos(price - last(smma))}`);
+  const e9 = ema(c, 9), e21 = ema(c, 21);
+  def(G_MA, "trend", "EMA-Kreuz 9/21", series(n, i => nn(e9[i], e21[i], A[i]) && A[i] ? clamp1((e9[i] - e21[i]) / (0.5 * A[i])) : null),
+      last(e21) == null ? "–" : last(e9) > last(e21) ? "9 über 21" : "9 unter 21", last(e9) > last(e21) ? "kurzfristig aufwärts" : "kurzfristig abwärts");
+  def(G_MA, "trend", "Neigung SMA 50 (10 Tage)", series(n, i => nn(s50[i], s50[i - 10], A[i]) && A[i] ? clamp1((s50[i] - s50[i - 10]) / A[i]) : null),
+      n > 60 && s50[n - 11] ? fmt(100 * (last(s50) / s50[n - 11] - 1), 2) + " %" : "–", n > 60 && last(s50) > s50[n - 11] ? "SMA 50 steigt" : "SMA 50 fällt");
+
+  // --- Oszillatoren ---
+  const hh10 = rmax(h, 10), ll10 = rmin(l, 10);
+  const smiN = ema(ema(series(n, i => hh10[i] == null ? null : c[i] - (hh10[i] + ll10[i]) / 2), 3), 3);
+  const smiDd = ema(ema(series(n, i => hh10[i] == null ? null : hh10[i] - ll10[i]), 3), 3);
+  const smi = series(n, i => nn(smiN[i], smiDd[i]) && smiDd[i] ? 200 * smiN[i] / smiDd[i] : null), smiS = ema(smi, 3);
+  def(G_OS, "revert", "Stochastic Momentum Index (10,3)", series(n, i => nn(smi[i], smiS[i]) ? clamp1(-smi[i] / 50 + 0.3 * sgn(smi[i] - smiS[i])) : null),
+      fmt(last(smi), 1), last(smi) > 40 ? "überkauft" : last(smi) < -40 ? "überverkauft" : "neutral");
+  const streak = Array(n).fill(0);
+  for (let i = 1; i < n; i++) streak[i] = c[i] > c[i - 1] ? (streak[i - 1] > 0 ? streak[i - 1] + 1 : 1) : c[i] < c[i - 1] ? (streak[i - 1] < 0 ? streak[i - 1] - 1 : -1) : 0;
+  const r3 = rsi(c, 3), rsStreak = rsi(streak, 2), ret1 = c.map((x, i) => i ? x / c[i - 1] - 1 : null);
+  const prank = series(n, i => { if (i < 101) return null; let k = 0; for (let j = i - 100; j < i; j++) if (ret1[j] < ret1[i]) k++; return k; });
+  const crsi = series(n, i => nn(r3[i], rsStreak[i], prank[i]) ? (r3[i] + rsStreak[i] + prank[i]) / 3 : null);
+  def(G_OS, "revert", "Connors RSI (3,2,100)", crsi.map(x => x == null ? null : clamp1(-(x - 50) / 35)), fmt(last(crsi), 1),
+      last(crsi) < 15 ? "stark überverkauft" : last(crsi) > 85 ? "stark überkauft" : "normal");
+  const stochOf = (x, p) => {
+    const out = Array(n).fill(null);
+    for (let i = p - 1; i < n; i++){ const w = x.slice(i - p + 1, i + 1); if (w.includes(null)) continue; const mx = Math.max(...w), mn = Math.min(...w); out[i] = mx > mn ? 100 * (x[i] - mn) / (mx - mn) : 50; }
+    return out;
+  };
+  const stc = ema(stochOf(ema(stochOf(sub(ema(c, 23), ema(c, 50)), 10), 3), 10), 3);
+  def(G_OS, "trend", "Schaff Trend Cycle (10,23,50)", series(n, i => nn(stc[i], stc[i - 1]) ? clamp1(0.5 * sgn(stc[i] - stc[i - 1]) + 0.5 * (stc[i] - 50) / 50) : null),
+      fmt(last(stc), 1), last(stc) > 75 ? "hoch (Aufwärtszyklus)" : last(stc) < 25 ? "tief (Abwärtszyklus)" : last(stc) > last(stc, 2) ? "steigt" : "fällt");
+  const dpo = series(n, i => i >= 11 && mid[i - 11] != null ? c[i] - mid[i - 11] : null);
+  def(G_OS, "revert", "Detrended Price Oscillator (20)", series(n, i => nn(dpo[i], A[i]) && A[i] ? clamp1(-dpo[i] / (1.5 * A[i])) : null),
+      fmt(last(dpo)), last(dpo) > 0 ? "über dem Zyklusmittel" : "unter dem Zyklusmittel");
+  const [ls14] = linreg(c, 14), s14 = sma(c, 14);
+  const cfo = series(n, i => nn(ls14[i], s14[i]) ? 100 * (c[i] - (s14[i] + ls14[i] * 6.5)) / c[i] : null);
+  def(G_OS, "revert", "Chande Forecast Oscillator (14)", cfo.map(x => x == null ? null : clamp1(-x / 2)), fmt(last(cfo), 2) + " %",
+      last(cfo) > 0 ? "über der Prognosegeraden" : "unter der Prognosegeraden");
+  const lagR = Array(n).fill(null);
+  { let L0 = c[0], L1 = c[0], L2 = c[0], L3 = c[0]; const g = 0.5;
+    for (let i = 0; i < n; i++){
+      const p0 = L0, p1 = L1, p2 = L2;
+      L0 = (1 - g) * c[i] + g * L0; L1 = -g * L0 + p0 + g * L1; L2 = -g * L1 + p1 + g * L2; L3 = -g * L2 + p2 + g * L3;
+      let cu = 0, cd = 0;
+      for (const [a, b] of [[L0, L1], [L1, L2], [L2, L3]]){ if (a >= b) cu += a - b; else cd += b - a; }
+      if (i >= 10) lagR[i] = cu + cd ? cu / (cu + cd) : 0.5;
+    } }
+  def(G_OS, "revert", "Laguerre-RSI (0,5)", lagR.map(x => x == null ? null : clamp1(-(x - 0.5) / 0.35)), fmt(last(lagR), 2),
+      last(lagR) < 0.15 ? "überverkauft" : last(lagR) > 0.85 ? "überkauft" : "neutral");
+  const roc63 = roc(63);
+  def(G_OS, "trend", "3-Monats-Momentum (ROC 63)", roc63.map(x => x == null ? null : clamp1(x / 15)), fmt(last(roc63), 1) + " %", last(roc63) > 0 ? "positiv" : "negativ");
+  const mom12 = c.map((x, i) => i >= 252 ? 100 * (c[i - 21] / c[i - 252] - 1) : null);
+  def(G_OS, "trend", "12-Monats-Momentum (ohne letzten Monat)", mom12.map(x => x == null ? null : clamp1(x / 30)), last(mom12) == null ? "–" : fmt(last(mom12), 1) + " %",
+      last(mom12) == null ? "zu kurze Kursgeschichte" : last(mom12) > 0 ? "langfristig stark" : "langfristig schwach");
+  const qst = sma(series(n, i => c[i] - o[i]), 14);
+  def(G_OS, "trend", "QStick (14)", series(n, i => nn(qst[i], A[i]) && A[i] ? clamp1(qst[i] / (0.3 * A[i])) : null), fmt(last(qst)),
+      last(qst) > 0 ? "überwiegend steigende Kerzen" : "überwiegend fallende Kerzen");
+
+  // --- Trend ---
+  const rwi = series(n, i => {
+    if (i < 15 || A[i] == null || !A[i]) return null;
+    let hi = 0, lo = 0;
+    for (let k = 2; k <= 14; k++){ const a = A[i] * Math.sqrt(k); hi = Math.max(hi, (h[i] - l[i - k]) / a); lo = Math.max(lo, (h[i - k] - l[i]) / a); }
+    return hi - lo;
+  });
+  def(G_TR, "trend", "Random Walk Index (14)", rwi.map(x => x == null ? null : clamp1(x / 1.5)), fmt(last(rwi), 2),
+      last(rwi) > 0.5 ? "echter Aufwärtstrend" : last(rwi) < -0.5 ? "echter Abwärtstrend" : "eher zufällige Bewegung");
+  const [lr50, lr50r] = linreg(c, 50);
+  def(G_TR, "trend", "Lineare Regression (50)", series(n, i => nn(lr50[i], lr50r[i], A[i]) && A[i] ? clamp1(lr50[i] * 25 / A[i]) * lr50r[i] : null),
+      last(lr50) == null ? "–" : `${fmt(last(lr50) * 50 / price * 100, 1)} % / 50 T. (R² ${fmt(last(lr50r), 2)})`, (last(lr50) > 0 ? "steigender" : "fallender") + " mittelfristiger Trend");
+  const dow = series(n, i => {
+    const Hs = sw.hi.filter(j => j + 3 <= i && j >= i - 120), Ls = sw.lo.filter(j => j + 3 <= i && j >= i - 120);
+    if (Hs.length < 2 || Ls.length < 2) return null;
+    return (sgn(h[Hs[Hs.length - 1]] - h[Hs[Hs.length - 2]]) + sgn(l[Ls[Ls.length - 1]] - l[Ls[Ls.length - 2]])) / 2;
+  });
+  def(G_TR, "trend", "Dow-Theorie (Hochs & Tiefs)", dow, last(dow) == null ? "–" : last(dow) > 0.5 ? "höhere Hochs & Tiefs" : last(dow) < -0.5 ? "tiefere Hochs & Tiefs" : "gemischt",
+      last(dow) > 0.5 ? "intakter Aufwärtstrend" : last(dow) < -0.5 ? "intakter Abwärtstrend" : "kein klares Muster");
+  const atrStop = Array(n).fill(null);
+  { let st = 1, stop = null;
+    for (let i = 0; i < n; i++){
+      if (A[i] == null) continue;
+      const upS = c[i] - 2.5 * A[i], dnS = c[i] + 2.5 * A[i];
+      if (stop == null){ stop = upS; st = 1; }
+      else if (st === 1){ if (c[i] < stop){ st = -1; stop = dnS; } else stop = Math.max(stop, upS); }
+      else { if (c[i] > stop){ st = 1; stop = upS; } else stop = Math.min(stop, dnS); }
+      atrStop[i] = st;
+    } }
+  def(G_TR, "trend", "ATR-Trailing-Stop (14; 2,5)", atrStop, last(atrStop) > 0 ? "long" : "short", last(atrStop) > 0 ? "Stop unter dem Kurs (aufwärts)" : "Stop über dem Kurs (abwärts)");
+  const yrN = crypto ? 365 : 252, hhY = rmax(h, yrN), llY = rmin(l, yrN);
+  const posY = series(n, i => nn(hhY[i], llY[i]) && hhY[i] > llY[i] ? (c[i] - llY[i]) / (hhY[i] - llY[i]) : null);
+  def(G_TR, "trend", "Lage in der 52-Wochen-Spanne", posY.map(x => x == null ? null : clamp1((x - 0.5) * 2)), last(posY) == null ? "–" : fmt(100 * last(posY), 0) + " %",
+      last(posY) > 0.9 ? "nahe am Jahreshoch" : last(posY) < 0.1 ? "nahe am Jahrestief" : "mittlerer Bereich");
+  { let vol = 0; for (let j = n - 10; j < n; j++) vol += Math.abs(c[j] - c[j - 1]);
+    const er = vol ? Math.abs(c[I] - c[n - 11]) / vol : 0;
+    def(G_TR, "info", "Kaufman Efficiency Ratio (10)", null, fmt(er, 2), er > 0.5 ? "sehr zielgerichtete Bewegung" : er < 0.2 ? "viel Hin und Her" : "mittel");
+    const w28 = c.slice(-28); let ad = 0; for (let j = n - 27; j < n; j++) ad += Math.abs(c[j] - c[j - 1]);
+    const vhf = ad ? (Math.max(...w28) - Math.min(...w28)) / ad : null;
+    def(G_TR, "info", "Vertical Horizontal Filter (28)", null, fmt(vhf, 2), vhf > 0.4 ? "Trendphase" : "Seitwärtsphase"); }
+
+  // --- Volatilität ---
+  const [lr100] = linreg(c, 100), s100 = MA.SMA100;
+  const rcDev = series(n, i => {
+    if (lr100[i] == null || s100[i] == null) return null;
+    let ss = 0; for (let k = 0; k < 100; k++){ const fit = s100[i] + lr100[i] * (k - 49.5); ss += (c[i - 99 + k] - fit) ** 2; }
+    const sdv = Math.sqrt(ss / 100); return sdv ? (c[i] - (s100[i] + lr100[i] * 49.5)) / sdv : 0;
+  });
+  def(G_VT, "revert", "Regressionskanal (100)", rcDev.map(x => x == null ? null : clamp1(-x / 2)), last(rcDev) == null ? "–" : fmt(last(rcDev), 2) + " σ",
+      last(rcDev) > 2 ? "am oberen Kanalrand" : last(rcDev) < -2 ? "am unteren Kanalrand" : "im Kanal");
+  const zsc = series(n, i => nn(mid[i], sd20[i]) && sd20[i] ? (c[i] - mid[i]) / sd20[i] : null);
+  def(G_VT, "revert", "Z-Score (20)", zsc.map(x => x == null ? null : clamp1(-x / 2)), fmt(last(zsc), 2), last(zsc) > 2 ? "ungewöhnlich hoch" : last(zsc) < -2 ? "ungewöhnlich tief" : "normal");
+  { let s = 0; for (let i = n - 14; i < n; i++){ const mx = Math.max(...c.slice(Math.max(0, i - 13), i + 1)); s += (100 * (c[i] / mx - 1)) ** 2; }
+    const ui = Math.sqrt(s / 14);
+    def(G_VT, "info", "Ulcer Index (14)", null, fmt(ui, 2), ui > 5 ? "deutliche Rückschläge zuletzt" : "wenig Rückschläge zuletzt");
+    const hlE = ema(series(n, i => h[i] - l[i]), 10), chv = n > 21 && hlE[n - 11] ? 100 * (last(hlE) / hlE[n - 11] - 1) : null;
+    def(G_VT, "info", "Chaikin-Volatilität (10)", null, chv == null ? "–" : fmt(chv, 1) + " %", chv > 20 ? "Schwankung nimmt deutlich zu" : chv < -20 ? "Schwankung nimmt deutlich ab" : "stabil");
+    const hv100 = stdev(lr, 100), vreg = last(hv) && last(hv100) ? last(hv) / last(hv100) : null;
+    def(G_VT, "info", "Volatilitäts-Regime (20 vs. 100)", null, vreg == null ? "–" : fmt(vreg, 2) + "×", vreg > 1.3 ? "unruhiger als üblich" : vreg < 0.75 ? "ruhiger als üblich" : "normal"); }
+
+  // --- Volumen ---
+  if (hasVol){
+    const vf = series(n, i => v[i] * (i && tp[i] > tp[i - 1] ? 1 : -1)), ko = sub(ema(vf, 34), ema(vf, 55)), koS = ema(ko, 13), avgV2 = sma(v, 20);
+    def(G_VO, "trend", "Klinger-Oszillator (vereinfacht)", series(n, i => nn(ko[i], koS[i], avgV2[i]) && avgV2[i] ? clamp1(0.5 * clamp1(ko[i] / (0.5 * avgV2[i])) + 0.5 * sgn(ko[i] - koS[i])) : null),
+        fmt(last(ko) / 1e6, 2) + " Mio", last(ko) > last(koS) ? "über Signallinie" : "unter Signallinie");
+    const nvi = [1000], pvi = [1000];
+    for (let i = 1; i < n; i++){ const r_ = c[i] / c[i - 1] - 1; nvi.push(v[i] < v[i - 1] ? nvi[i - 1] * (1 + r_) : nvi[i - 1]); pvi.push(v[i] > v[i - 1] ? pvi[i - 1] * (1 + r_) : pvi[i - 1]); }
+    const nviE = ema(nvi, 255), pviE = ema(pvi, 255);
+    def(G_VO, "trend", "Negative Volume Index", series(n, i => nviE[i] ? clamp1((nvi[i] / nviE[i] - 1) * 20) : null), fmt(last(nvi), 0),
+        last(nviE) == null ? "zu kurze Kursgeschichte" : last(nvi) > last(nviE) ? "über Durchschnitt: ruhige Tage steigen" : "unter Durchschnitt");
+    def(G_VO, "trend", "Positive Volume Index", series(n, i => pviE[i] ? clamp1((pvi[i] / pviE[i] - 1) * 20) : null), fmt(last(pvi), 0),
+        last(pviE) == null ? "zu kurze Kursgeschichte" : last(pvi) > last(pviE) ? "über Durchschnitt: lebhafte Tage steigen" : "unter Durchschnitt");
+    const ev12 = ema(v, 12), ev26 = ema(v, 26), pvo = series(n, i => nn(ev12[i], ev26[i]) && ev26[i] ? 100 * (ev12[i] - ev26[i]) / ev26[i] : null);
+    def(G_VO, "trend", "Volumen-Oszillator (PVO 12,26)", series(n, i => pvo[i] == null || i < 5 ? null : sgn(c[i] - c[i - 5]) * clamp1(Math.max(0, pvo[i]) / 20)),
+        fmt(last(pvo), 1) + " %", last(pvo) > 0 ? "Volumen steigt bei " + (price >= c[n - 6] ? "steigenden" : "fallenden") + " Kursen" : "Volumen nimmt ab");
+    const adv = series(n, i => { const th = i ? Math.max(h[i], c[i - 1]) : h[i], tl = i ? Math.min(l[i], c[i - 1]) : l[i], rg = th - tl; return rg ? ((c[i] - tl) - (th - c[i])) / rg * v[i] : 0; });
+    const tmfN = rma(adv, 21), tmfD = rma(v, 21), tmf = series(n, i => nn(tmfN[i], tmfD[i]) && tmfD[i] ? tmfN[i] / tmfD[i] : null);
+    def(G_VO, "trend", "Twiggs Money Flow (21)", tmf.map(x => x == null ? null : clamp1(x / 0.15)), fmt(last(tmf), 3), last(tmf) > 0 ? "Kaufdruck" : "Verkaufsdruck");
+    const f2 = ema(series(n, i => i ? (c[i] - c[i - 1]) * v[i] : null), 2), f2sd = stdev(f2, 50);
+    def(G_VO, "revert", "Force Index (2)", series(n, i => nn(f2[i], f2sd[i]) && f2sd[i] ? clamp1(-f2[i] / (2 * f2sd[i])) : null), fmt(last(f2) / 1e6, 1) + " Mio",
+        last(f2) < 0 ? "kurzfristiger Verkaufsdruck (Erholung möglich)" : "kurzfristiger Kaufdruck (Rücksetzer möglich)");
+    const v50 = rsum(v, 50), tpv50 = rsum(series(n, i => tp[i] * v[i]), 50), vwap50 = series(n, i => nn(v50[i], tpv50[i]) && v50[i] ? tpv50[i] / v50[i] : null);
+    def(G_VO, "trend", "VWAP (50 Tage)", series(n, i => dist(vwap50[i], i)), fmt(last(vwap50)), `Kurs ${pos(price - last(vwap50))}`);
+    const obv2 = [0]; for (let i = 1; i < n; i++) obv2.push(obv2[i - 1] + (c[i] > c[i - 1] ? v[i] : c[i] < c[i - 1] ? -v[i] : 0));
+    const oDiv = divergence(obv2, sw, h, l, n);
+    def(G_PA, "pattern", "OBV-Divergenz", oDiv, last(oDiv) > 0 ? "bullisch" : last(oDiv) < 0 ? "bärisch" : "keine", divNote(last(oDiv)));
+  }
+
+  // --- Muster ---
+  const sDiv = divergence(kS, sw, h, l, n);
+  def(G_PA, "pattern", "Stochastik-Divergenz", sDiv, last(sDiv) > 0 ? "bullisch" : last(sDiv) < 0 ? "bärisch" : "keine", divNote(last(sDiv)));
+  const multi = i => {
+    if (i < 6) return [0, ""];
+    const gr = k => c[k] > o[k], rd = k => c[k] < o[k], body = k => Math.abs(c[k] - o[k]), rg = k => h[k] - l[k];
+    const dn = c[i - 1] < c[i - 5], upT = c[i - 1] > c[i - 5];
+    if (gr(i) && gr(i - 1) && gr(i - 2) && c[i] > c[i - 1] && c[i - 1] > c[i - 2] && [i, i - 1, i - 2].every(k => body(k) > 0.5 * rg(k))) return [0.8, "Drei weiße Soldaten"];
+    if (rd(i) && rd(i - 1) && rd(i - 2) && c[i] < c[i - 1] && c[i - 1] < c[i - 2] && [i, i - 1, i - 2].every(k => body(k) > 0.5 * rg(k))) return [-0.8, "Drei schwarze Krähen"];
+    if (dn && rd(i - 1) && gr(i) && o[i] < l[i - 1] && c[i] > (o[i - 1] + c[i - 1]) / 2 && c[i] < o[i - 1]) return [0.7, "Piercing Line"];
+    if (upT && gr(i - 1) && rd(i) && o[i] > h[i - 1] && c[i] < (o[i - 1] + c[i - 1]) / 2 && c[i] > o[i - 1]) return [-0.7, "Dark Cloud Cover"];
+    if (dn && rd(i - 1) && gr(i) && o[i] > c[i - 1] && c[i] < o[i - 1] && body(i) < 0.6 * body(i - 1)) return [0.5, "bullischer Harami"];
+    if (upT && gr(i - 1) && rd(i) && o[i] < c[i - 1] && c[i] > o[i - 1] && body(i) < 0.6 * body(i - 1)) return [-0.5, "bärischer Harami"];
+    return [0, ""];
+  };
+  const mcS = series(n, i => { const [a] = multi(i); if (a) return a; const [b2] = multi(i - 1); return b2 * 0.5; });
+  { const [a, nm] = multi(I), [b2, nm2] = multi(I - 1);
+    def(G_PA, "pattern", "Mehrtages-Kerzenmuster", mcS, a ? nm : b2 ? nm2 + " (gestern)" : "keins", a || b2 ? "Signal aus mehreren Kerzen" : "kein klares Muster"); }
+  const gap = series(n, i => {
+    if (i < 2 || !A[i]) return null;
+    if (l[i] > h[i - 1]) return clamp1((l[i] - h[i - 1]) / (0.5 * A[i]));
+    if (h[i] < l[i - 1]) return clamp1(-(l[i - 1] - h[i]) / (0.5 * A[i]));
+    return l[i - 1] > h[i - 2] ? 0.4 : h[i - 1] < l[i - 2] ? -0.4 : 0;
+  });
+  def(G_PA, "pattern", "Kurslücke (Gap)", gap, last(gap) > 0 ? "Lücke nach oben" : last(gap) < 0 ? "Lücke nach unten" : "keine",
+      last(gap) > 0 ? "Kaufinteresse über Nacht" : last(gap) < 0 ? "Verkaufsdruck über Nacht" : "keine offene Lücke");
+  const brk = series(n, i => {
+    if (i < 21 || hhY[i - 1] == null) return null;
+    if (h[i] >= hhY[i - 1]) return 1;
+    if (l[i] <= llY[i - 1]) return -1;
+    for (let k = 1; k <= 20; k++){ if (hhY[i - k - 1] == null) break; if (h[i - k] >= hhY[i - k - 1]) return 0.5; if (l[i - k] <= llY[i - k - 1]) return -0.5; }
+    return 0;
+  });
+  def(G_PA, "pattern", "Neues 52-Wochen-Hoch/-Tief", brk,
+      last(brk) == null ? "–" : last(brk) >= 1 ? "neues Hoch heute" : last(brk) <= -1 ? "neues Tief heute" : last(brk) > 0 ? "neues Hoch (20 Tage)" : last(brk) < 0 ? "neues Tief (20 Tage)" : "keins",
+      last(brk) > 0 ? "Stärke: Ausbruch nach oben" : last(brk) < 0 ? "Schwäche: Ausbruch nach unten" : "kein Ausbruch");
+  const pivS = series(n, i => {
+    if (i < 2 || !A[i]) return null;
+    const H0 = h[i - 1], L0 = l[i - 1], C0 = c[i - 1], P0 = (H0 + L0 + C0) / 3, R1 = 2 * P0 - L0, S1 = 2 * P0 - H0;
+    if (c[i] > R1) return 0.5; if (c[i] < S1) return -0.5;
+    const dS = (c[i] - S1) / A[i], dR = (R1 - c[i]) / A[i];
+    return clamp1((dR - dS) / (dR + dS + 1e-9) * 0.5);
+  });
+  { const P0 = (h[n - 2] + l[n - 2] + c[n - 2]) / 3, R1 = 2 * P0 - l[n - 2], S1 = 2 * P0 - h[n - 2];
+    def(G_PA, "pattern", "Lage zu den Pivot-Punkten", pivS, price > R1 ? "über R1" : price < S1 ? "unter S1" : price > P0 ? "zwischen P und R1" : "zwischen S1 und P",
+        price > R1 ? "Ausbruch über den Widerstand" : price < S1 ? "Bruch der Unterstützung" : last(pivS) > 0 ? "näher an der Unterstützung" : "näher am Widerstand"); }
+
   // --- Gewichtung, Bewertung je Tag und Rückblick-Test ---------------------
   const K = defs.length, rated = defs.map((d, k) => d.style !== "info" ? k : -1).filter(k => k >= 0);
   const hit = new Array(K).fill(0), tot = new Array(K).fill(0);
@@ -1866,8 +2093,7 @@ function analyze(raw){
     signals: sig, groups, total: tot2, tip, pivots, reliability, crypto, F: {c, score, sd: hv, start, trend: c.map((x, i) => s200[i] == null ? 0 : sgn(x - s200[i]))},
     drivers: defs.map((dd, k) => ({name: sig[k].name, note: sig[k].note, c: contrib[k]})).filter(x => x.c !== 0),
     chart: {
-      dates: cs.slice(n - k).map(x => raw.intraday ? new Date(x.t * 1000).toISOString().replace(/^\d{4}-(\d\d)-(\d\d)T(\d\d:\d\d).*$/, "$2.$1. $3")
-      : new Date(x.t * 1000).toLocaleDateString("de-DE", {day: "2-digit", month: "2-digit", year: "2-digit", timeZone: "UTC"})),
+      dates: cs.slice(n - k).map(x => { const z = new Date(x.t * 1000).toISOString(); return raw.intraday ? `${z.slice(8, 10)}.${z.slice(5, 7)}. ${z.slice(11, 16)}` : `${z.slice(8, 10)}.${z.slice(5, 7)}.${z.slice(2, 4)}`; }),
       o: tail(o), h: tail(h), l: tail(l), c: tail(c), sma20: tail(mid), sma50: tail(s50), sma200: tail(s200),
       bbu: tail(bbu), bbl: tail(bbl), rsi: tail(r), macd: tail(macd), msig: tail(msig), mhist: tail(mhist),
       stk: tail(kS), std: tail(dS), v: tail(v), score: tail(score),
