@@ -283,6 +283,24 @@ body{background:radial-gradient(1100px 420px at 8% -8%,var(--accent-soft),transp
 .tab-ind{position:absolute;left:0;bottom:-1px;height:2px;width:0;background:var(--accent);border-radius:2px;transition:transform .4s cubic-bezier(.2,.8,.2,1),width .4s cubic-bezier(.2,.8,.2,1)}
 .chips{position:relative}.chip{position:relative;z-index:1;transition:color .25s,background .25s}#hzChips .chip.on{background:transparent}
 .chip-ind{position:absolute;top:3px;bottom:3px;left:0;width:0;border-radius:6px;background:var(--accent);transition:transform .38s cubic-bezier(.2,.8,.2,1),width .38s cubic-bezier(.2,.8,.2,1),opacity .2s;z-index:0}
+/* Neuigkeiten */
+.newsfeed{margin-bottom:14px}
+.nf-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.nf-head h3{margin:0}
+.nf-filter{display:flex;gap:4px;flex-wrap:wrap}.nf-filter .chip{box-shadow:inset 0 0 0 1px var(--line)}
+.nf-list{list-style:none;margin:0 0 8px;padding:0}
+.nf-item{display:flex;gap:12px;padding:10px 6px;border-bottom:1px solid var(--line);border-radius:8px;transition:background .2s}
+.nf-item[data-newsopen]{cursor:pointer}.nf-item[data-newsopen]:hover{background:var(--surface2)}
+.nf-item:last-child{border-bottom:0}
+.nf-main{min-width:0;flex:1}
+.nf-meta{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--muted);flex-wrap:wrap}.nf-meta b{color:var(--text);font-weight:600}
+.nf-kind{font:600 10.5px var(--cond);letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:4px}
+.nf-kind.k-up{background:var(--up-soft);color:var(--up)}.nf-kind.k-down{background:var(--down-soft);color:var(--down)}.nf-kind.k-info{background:var(--accent-soft);color:var(--accent)}
+.nf-kind.k-press{background:var(--surface2);color:var(--text);box-shadow:inset 0 0 0 1px var(--line)}.nf-kind.k-promo{background:var(--warn-soft);color:var(--warn)}
+.nf-title{font-weight:600;margin-top:3px}.nf-text{font-size:13.5px;color:var(--muted);margin-top:2px}
+.nf-item details summary{cursor:pointer;font-weight:600;margin-top:3px}
+.nf-item details p{font-size:13.5px;color:var(--muted);margin:6px 0;line-height:1.55}
+.linkbtn{border:0;background:none;color:var(--accent);font-weight:600;cursor:pointer;padding:0;font-size:inherit}
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
   .ticker{overflow-x:auto;-webkit-mask-image:none;mask-image:none}
@@ -340,6 +358,7 @@ body{background:radial-gradient(1100px 420px at 8% -8%,var(--accent-soft),transp
   <section id="overview">
     <div class="welcome" id="welcome"><div class="w-text" id="wText"></div><div class="w-art" id="wArt"></div></div>
     <div class="summary" id="summary"></div>
+    <section class="panel newsfeed" id="newsFeed" aria-label="Neuigkeiten"></section>
     <div class="grid" id="grid"><div class="startup" id="startup">Das Dashboard startet …</div></div>
   </section>
   <section id="detail" hidden></section>
@@ -576,6 +595,8 @@ async function tick(force){
     await Promise.all(jobs);
     // 1b) Stundenkerzen für Stunden-Prognosen (höchstens eine Abfrage pro Takt)
     if (budgetOK()){ const si = nextIntra(); if (si) await guardedIntra(si); }
+    // 1c) Unternehmensmeldungen: höchstens eine Abfrage pro Takt und nur mit freier Kapazität
+    if (budgetOK() && callTimes.length <= 3 && usedToday() < DAY_LIMIT - DAY_RESERVE){ const sn = nextNews(); if (sn) await loadNews(sn); }
     // 2) ein Live-Kurs reihum (oder der ausgewählte Wert bei "Jetzt aktualisieren")
     const ready = symbols.every(s => store[s] && (store[s].candles || store[s].error));
     if (ready && budgetOK() && usedToday() < DAY_LIMIT - DAY_RESERVE){
@@ -974,13 +995,182 @@ Wenn du das Wertpapier nicht sicher kennst, setze "what" auf "unbekannt" und las
 }
 
 // ---------------------------------------------------------------------
+// Neuigkeiten: Kursereignisse aus den Kursdaten + Meldungen von Twelve Data
+// ---------------------------------------------------------------------
+const NEWS_AGE = 6 * 3600e3;                 // Meldungen je Wert höchstens alle 6 Stunden abfragen
+const newsStore = load("news", {});           // Symbol -> {t, items, err}
+let events = load("events", []);              // [{id, sym, t, kind, title, text}]
+const tipMem = load("tipmem", {});
+let nfFilter = load("nff", "all"), nfMore = false, newsSum = {};
+const ALIAS = {NVDA: ["NVIDIA", "Nvidia"], AAPL: ["Apple"], MSFT: ["Microsoft"], AMZN: ["Amazon"], GOOGL: ["Alphabet", "Google"], META: ["Meta Platforms", "Facebook", "Instagram", "WhatsApp"],
+  TSLA: ["Tesla"], SAP: ["SAP"], AMD: ["AMD", "Advanced Micro Devices"], NFLX: ["Netflix"], INTC: ["Intel"], KO: ["Coca-Cola"], DIS: ["Disney"], JPM: ["JPMorgan", "J.P. Morgan"],
+  "BTC/USD": ["Bitcoin"], "ETH/USD": ["Ethereum", "Ether"]};
+const reEsc = x => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function relevance(s, it){
+  const names = (ALIAS[s] || []).slice(), nm = coName(s, data[s]).replace(/\s*\(.*\)$/, "");
+  if (nm && !names.includes(nm)) names.push(nm);
+  const tick = tdArgs(s).symbol.split("/")[0];
+  const rx = new RegExp(`\\b(${names.map(reEsc).join("|")})\\b`), tk = new RegExp(`(NASDAQ|NYSE|Nasdaq)\\s*:\\s*${reEsc(tick)}\\b`);
+  if (rx.test(it.title) || tk.test(it.title)) return 2;
+  if (rx.test(it.body) || tk.test(it.body)) return 1;
+  return 0;
+}
+const PROMO = /Investments Opinions|Market News Updates|FN Media|Oilprice|Market Commentary|Sponsored|paid advertisement/i;
+const cleanMd = t => String(t || "").replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[*_#>`]+/g, "")
+  .replace(/…\s*\[trimmed\]\s*$/, "…").replace(/\s+/g, " ").trim();
+function saveNews(){ const o = {}; for (const [k, v] of Object.entries(newsStore)) if (v.t) o[k] = {t: v.t, items: v.items || [], err: v.err || null}; save("news", o); }
+async function loadNews(s){
+  const e = newsStore[s] = newsStore[s] || {};
+  e.loading = true;
+  try{
+    noteCall();
+    let res;
+    try{ res = await mcp.callTool(SERVER, "get_company_news", {...tdArgs(s), outputsize: 10}, {cache: false}); }
+    catch(err){ if (err && err.code === "tool_error") throw apiError(err.message || resultText(err.result)); throw err; }
+    const text = resultText(res);
+    let j; try{ j = JSON.parse(text); }catch(_){ throw apiError(text); }
+    const items = (j.press_releases || []).map(p => ({id: String(p.id), t: Date.parse(p.datetime) || 0, title: cleanMd(p.title), body: cleanMd(p.body).slice(0, 700),
+        source: String(p.source || ""), lang: (p.language || []).join(","), subjects: (p.subjects || []).join(", ")}))
+      .filter(it => !it.lang || /(^|,)(de|en)/.test(it.lang))
+      .map(it => ({...it, rel: relevance(s, it), promo: PROMO.test(it.subjects + " " + it.source + " " + it.body.slice(0, 160))}))
+      .filter(it => it.rel > 0);
+    Object.assign(e, {t: Date.now(), items, err: null});
+  }catch(err){
+    if (err && err.code === "api"){
+      if (err.kind !== "minute" && err.kind !== "day") Object.assign(e, {t: Date.now(), items: [], err: err.kind === "plan" ? "Meldungen gibt es für diesen Wert erst im bezahlten Twelve-Data-Tarif." : err.message});
+    } else if (err && (FATAL[err.code] || NO_MCP[err.code])) handleError(s, err);
+    else Object.assign(e, {t: Date.now() - NEWS_AGE + 15 * 60e3, items: e.items || [], err: "Meldungen gerade nicht erreichbar, neuer Versuch in 15 Minuten."});
+  }finally{ e.loading = false; saveNews(); }
+}
+function nextNews(){
+  const now = Date.now();
+  const order = symbols.slice().sort((a, b) => (b === selected) - (a === selected) || prioOf(b) - prioOf(a));
+  for (const s of order){
+    if (!ready(s)) continue;
+    const e = newsStore[s];
+    if (e && (e.loading || (e.t && now - e.t < NEWS_AGE))) continue;
+    return s;
+  }
+  return null;
+}
+// Kursereignisse: aus den echten Kursdaten erkannt, mit Zeitstempel im Verlauf gespeichert
+function genEvents(s){
+  const d = data[s]; if (!d || d.error || !d.chart) return false;
+  const nm = coName(s, d), T = d.marketTime ? d.marketTime * 1000 : Date.now(), day = d.chart.dates[d.chart.dates.length - 1];
+  const sig = name => d.signals.find(x => x.name === name), out = [];
+  const big = d.crypto ? 5 : 3, ch = d.changePct;
+  if (Math.abs(ch) >= big) out.push({kind: ch > 0 ? "up" : "down", key: "move", title: `${nm} ${ch > 0 ? "steigt" : "fällt"} um ${nf(Math.abs(ch), 1)} %`,
+    text: `Größere Tagesbewegung. Der Kurs liegt bei ${nf(d.price)} ${d.currency}.`});
+  const b52 = sig("Neues 52-Wochen-Hoch/-Tief");
+  if (b52 && /heute/.test(b52.value)) out.push({kind: b52.signal > 0 ? "up" : "down", key: "52w", title: `${nm}: ${b52.signal > 0 ? "neues 52-Wochen-Hoch" : "neues 52-Wochen-Tief"}`,
+    text: b52.signal > 0 ? "Der Kurs ist so hoch wie seit einem Jahr nicht mehr." : "Der Kurs ist so tief wie seit einem Jahr nicht mehr."});
+  const cr = sig("SMA 50/200 Kreuz"), crM = cr && cr.note.match(/vor (\d+) Tagen/);
+  if (crM && +crM[1] <= 1) out.push({kind: cr.value === "Golden" ? "up" : "down", key: "cross", title: `${nm}: ${cr.value === "Golden" ? "Golden Cross" : "Death Cross"}`,
+    text: cr.value === "Golden" ? "Der 50-Tage-Schnitt hat den 200-Tage-Schnitt nach oben gekreuzt, ein klassisches Aufwärtssignal." : "Der 50-Tage-Schnitt hat den 200-Tage-Schnitt nach unten gekreuzt, ein klassisches Abwärtssignal."});
+  const dc = sig("Donchian-Kanal (20)");
+  if (dc && /Ausbruch/.test(dc.note)) out.push({kind: dc.signal > 0 ? "up" : "down", key: "break", title: `${nm}: ${dc.note}`,
+    text: dc.signal > 0 ? "Der Kurs liegt über dem Hoch der letzten 20 Handelstage." : "Der Kurs liegt unter dem Tief der letzten 20 Handelstage."});
+  const vr = sig("Volumen vs. Ø20"), vrN = vr ? parseFloat(String(vr.value).replace(",", ".")) : 0;
+  if (vrN >= 2) out.push({kind: "info", key: "vol", title: `${nm}: ungewöhnlich hohes Handelsvolumen`, text: `${vr.value} des üblichen Volumens, ${vr.note}.`});
+  for (const dn of ["RSI-Divergenz", "MACD-Divergenz"]){
+    const x = sig(dn); if (x && x.signal) out.push({kind: x.signal > 0 ? "up" : "down", key: dn, title: `${nm}: ${x.value === "bullisch" ? "bullische" : "bärische"} ${dn}`, text: x.note + "."});
+  }
+  const cp = sig("Kerzenmuster");
+  if (cp && cp.value !== "keins" && !/gestern/.test(cp.value)) out.push({kind: cp.signal > 0 ? "up" : "down", key: "candle", title: `${nm}: Kerzenmuster „${cp.value}“`, text: cp.note + "."});
+  const f = fcFor(s), lbl = f ? tipLabel(f) : null, mk = s + "|" + hzKey(hz);
+  if (f && tipMem[mk] !== undefined && tipMem[mk] !== lbl) out.push({kind: f.tip ? (f.dirF > 0 ? "up" : "down") : "info", key: "tip:" + hzKey(hz) + ":" + lbl + ":" + Math.floor(Date.now() / 3600e3), t: Date.now(),
+    title: `${nm}: Tipp für ${hzLabel(hz)} jetzt „${lbl}“`,
+    text: f.tip ? `Vorher: „${tipMem[mk]}“. Wahrscheinlichkeit ${pc(f.pDir)}, vorsichtig geschätzt mindestens ${pc(f.lb)}.` : `Vorher: „${tipMem[mk]}“. Die Richtung lässt sich gerade nicht sicher genug bestimmen.`});
+  if (f) tipMem[mk] = lbl;
+  let added = false;
+  for (const ev of out){
+    const id = `${s}:${ev.key}:${ev.key.startsWith("tip") ? "" : day}`;
+    if (events.some(x => x.id === id)) continue;
+    events.push({id, sym: s, t: ev.t || T, kind: ev.kind, title: ev.title, text: ev.text}); added = true;
+  }
+  return added;
+}
+function updateEvents(){
+  let added = false;
+  for (const s of symbols) if (ready(s) && genEvents(s)) added = true;
+  save("tipmem", tipMem);
+  if (added){ events.sort((a, b) => b.t - a.t); events = events.slice(0, 150); save("events", events); }
+}
+function feedItems(sym){
+  const list = [];
+  for (const ev of events) if ((!sym || ev.sym === sym) && symbols.includes(ev.sym)) list.push({...ev, type: "event"});
+  for (const s of sym ? [sym] : symbols){
+    const e = newsStore[s]; if (!e || !e.items) continue;
+    for (const it of e.items) list.push({id: "n:" + it.id + ":" + s, sym: s, t: it.t, type: "press", kind: it.promo ? "promo" : "press", title: it.title, text: it.body, source: it.source, rel: it.rel, promo: it.promo});
+  }
+  return list.sort((a, b) => b.t - a.t);
+}
+function ago(t){
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return "gerade eben"; if (m < 60) return `vor ${m} Min.`;
+  const h = Math.round(m / 60); if (h < 24) return `vor ${h} Std.`;
+  const dd = Math.round(h / 24); if (dd < 8) return `vor ${dd} ${dd === 1 ? "Tag" : "Tagen"}`;
+  return new Date(t).toLocaleDateString("de-DE", {day: "numeric", month: "short", year: dd > 300 ? "numeric" : undefined});
+}
+const KIND = {up: ["Kursereignis", "k-up"], down: ["Kursereignis", "k-down"], info: ["Kursereignis", "k-info"], press: ["Meldung", "k-press"], promo: ["Marktkommentar (Werbung)", "k-promo"]};
+function feedItemHTML(it, withName = true, open = false){
+  const [kl, kc] = KIND[it.kind] || KIND.info, nm = coName(it.sym, data[it.sym]);
+  const body = it.type === "press"
+    ? `<details ${open ? "open" : ""}><summary>${esc(it.title)}</summary><p>${esc(it.text)}</p><div class="fine">Quelle: ${esc(it.source || "unbekannt")} · ${it.rel === 2 ? "über " : "erwähnt "}${esc(nm)}</div></details>`
+    : `<div class="nf-title">${esc(it.title)}</div><div class="nf-text">${esc(it.text)}</div>`;
+  return `<li class="nf-item ${kc}" ${withName ? `data-newsopen="${esc(it.sym)}"` : ""}>${avatarHTML(it.sym, 34)}<div class="nf-main">
+    <div class="nf-meta"><span class="nf-kind ${kc}">${kl}</span>${withName ? `<b>${esc(nm)}</b>` : ""}<span>${esc(ago(it.t))}</span></div>${body}</div></li>`;
+}
+function renderFeed(){
+  const all = feedItems(), list = all.filter(it => nfFilter === "all" || (nfFilter === "events" ? it.type === "event" : it.type === "press"));
+  const shown = list.slice(0, nfMore ? 30 : 6), pending = symbols.filter(s => ready(s) && !(newsStore[s] && newsStore[s].t)).length;
+  const tabs = [["all", "Alle"], ["events", "Kursereignisse"], ["press", "Meldungen"]];
+  setHTML($("#newsFeed"), `<div class="nf-head"><h3>Neuigkeiten</h3>
+      <div class="nf-filter" role="group" aria-label="Neuigkeiten filtern">${tabs.map(([k, l]) => `<button type="button" class="chip ${nfFilter === k ? "on" : ""}" data-nff="${k}">${l}</button>`).join("")}</div></div>
+    ${shown.length ? `<ul class="nf-list">${shown.map(it => feedItemHTML(it)).join("")}</ul>` : `<p class="muted" style="margin:6px 0">${nfFilter === "press" ? (mode === "demo" ? "Meldungen gibt es nur mit echten Kursen." : pending ? "Meldungen werden nach und nach geladen …" : "Keine Meldungen, die diese Firmen betreffen.") : "Noch keine Kursereignisse. Sie erscheinen, sobald sich bei einem Wert etwas Auffälliges tut, zum Beispiel ein neues Jahreshoch."}</p>`}
+    ${list.length > 6 ? `<button type="button" class="btn ghost" id="nfMore">${nfMore ? "Weniger anzeigen" : `Mehr anzeigen (${Math.min(list.length, 30)})`}</button>` : ""}
+    <div class="fine">Kursereignisse erkennt die Seite selbst in den echten Kursdaten. Meldungen sind Pressemitteilungen über Twelve Data: Im kostenlosen Tarif sind sie oft einige Monate alt und teils bezahlte Marktkommentare (markiert).${pending && mode !== "demo" ? ` Meldungen für ${pending} Werte folgen.` : ""}</div>`);
+}
+async function summarizeNews(s){
+  const items = (newsStore[s] && newsStore[s].items) || [];
+  if (!sampleFn || !items.length || newsSum[s] === "…") return;
+  newsSum[s] = "…"; renderDetail();
+  try{
+    const txt = items.slice(0, 8).map((it, k) => `${k + 1}. [${new Date(it.t).toISOString().slice(0, 10)}] ${it.title} (Quelle: ${it.source}${it.promo ? ", bezahlter Marktkommentar" : ""})\n${it.body.slice(0, 500)}`).join("\n\n");
+    const {text} = await sampleFn(`Fasse die folgenden Pressemitteilungen, in denen ${coName(s, data[s])} vorkommt, auf Deutsch in 3 bis 5 kurzen Stichpunkten zusammen (je eine Zeile, beginnend mit "- ").
+Nenne jeweils das Datum. Sag deutlich, wenn eine Mitteilung die Firma nur am Rand erwähnt oder ein bezahlter Marktkommentar ist. Keine Anlageempfehlung, keine Kursziele.\n\n${txt}`, {modelTier: "default", cache: {gcTime: 6 * 3600e3}});
+    newsSum[s] = text;
+  }catch(e){
+    newsSum[s] = null;
+    if (e && ["not_granted", "sampling_disabled", "not_declared", "capability_disabled", "capability_removed"].includes(e.code)) sampleFn = null;
+  }
+  renderDetail();
+}
+function newsTabHTML(d){
+  const s = selected, e = newsStore[s] || {}, evs = feedItems(s).filter(x => x.type === "event").slice(0, 20), pr = feedItems(s).filter(x => x.type === "press");
+  const sum = newsSum[s];
+  return `<div class="cols"><div class="panel"><h3>Meldungen zu ${esc(coName(s, d))}</h3>
+      ${mode === "demo" ? `<p class="muted">Meldungen gibt es nur mit echten Kursen von Twelve Data.</p>`
+      : e.loading ? `<p class="muted">Meldungen werden geladen …</p>`
+      : !e.t ? `<p class="muted">Meldungen werden gleich geladen (1 Twelve-Data-Abfrage).</p>`
+      : e.err && !pr.length ? `<p class="errtxt">${esc(e.err)}</p>`
+      : !pr.length ? `<p class="muted">Twelve Data hat keine Pressemitteilungen, die ${esc(coName(s, d))} betreffen.</p>` : ""}
+      ${pr.length && sampleFn ? `<div class="plan">${sum && sum !== "…" ? `<b>Zusammenfassung von Claude</b><ul>${sum.split("\n").filter(l => l.trim()).map(l => `<li>${esc(l.replace(/^\s*[-•]\s*/, ""))}</li>`).join("")}</ul><div class="fine">Von Claude erstellt, kann Fehler enthalten.</div>`
+        : `<button class="btn" type="button" data-sumnews="${esc(s)}" ${sum === "…" ? "disabled" : ""}>${sum === "…" ? "Claude fasst zusammen …" : "Auf Deutsch zusammenfassen lassen"}</button> <span class="fine">nutzt dein Claude-Kontingent</span>`}</div>` : ""}
+      ${pr.length ? `<ul class="nf-list">${pr.map((it, k) => feedItemHTML(it, false, k === 0)).join("")}</ul>` : ""}
+      ${mode !== "demo" && e.t ? `<div class="fine">Zuletzt abgefragt ${esc(ago(e.t))}. <button class="linkbtn" type="button" data-reloadnews="${esc(s)}">Jetzt neu abfragen</button></div>` : ""}
+    </div>
+    <div class="panel"><h3>Kursereignisse</h3>${evs.length ? `<ul class="nf-list">${evs.map(it => feedItemHTML(it, false)).join("")}</ul>` : `<p class="muted">Noch keine Kursereignisse für diesen Wert erfasst. Die Seite merkt sich ab jetzt große Tagesbewegungen, Jahreshochs und -tiefs, Trendwenden und Tipp-Wechsel.</p>`}</div></div>`;
+}
+
+// ---------------------------------------------------------------------
 // Status, Hinweise, Fehler
 // ---------------------------------------------------------------------
 function updateNote(){
   if (mode === "demo") return;
   $("#note").innerHTML = `<b>Echte Kurse von Twelve Data.</b> Alle ${everySec} s wird reihum ein Wert aktualisiert · heute <b class="num">${usedToday()}</b> von ${DAY_LIMIT} Abfragen genutzt ·
     <details><summary>So funktioniert es</summary><span class="more">Dein kostenloser Tarif erlaubt 800 Abfragen pro Tag und 8 pro Minute. Deshalb wird reihum ein Wert aktualisiert, jeder höchstens einmal pro Minute,
-    bei geschlossener Börse nur alle 15 Minuten. Die Kurshistorie (etwa 4 Jahre) wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten, SAP gibt es aber über die Börse New York. Tipps erscheinen nur, wenn die Wahrscheinlichkeit richtig zu liegen auch vorsichtig geschätzt über 50 % liegt und sich diese Regel beim jeweiligen Wert früher nachweislich bewährt hat, sonst steht dort „Kein Tipp“. Mit dem Stern auf jeder Karte legst du die Priorität fest: ★ Hoch = oben und etwa 3× so oft aktualisiert, ☆ Normal, ▽ Niedrig = unten und selten aktualisiert (spart Abfragen). Für Stunden-Prognosen werden zusätzlich Stundenkerzen geladen: 1 Abfrage je Wert, höchstens alle 20 Minuten und nur, wenn ein Stunden-Zeitraum gewählt ist.</span></details>`;
+    bei geschlossener Börse nur alle 15 Minuten. Die Kurshistorie (etwa 4 Jahre) wird einmal am Tag geladen. Deutsche Börsenplätze (z. B. SAP.DE) sind erst im bezahlten Tarif enthalten, SAP gibt es aber über die Börse New York. Tipps erscheinen nur, wenn die Wahrscheinlichkeit richtig zu liegen auch vorsichtig geschätzt über 50 % liegt und sich diese Regel beim jeweiligen Wert früher nachweislich bewährt hat, sonst steht dort „Kein Tipp“. Mit dem Stern auf jeder Karte legst du die Priorität fest: ★ Hoch = oben und etwa 3× so oft aktualisiert, ☆ Normal, ▽ Niedrig = unten und selten aktualisiert (spart Abfragen). Meldungen werden je Wert höchstens alle 6 Stunden abgefragt (1 Abfrage). Für Stunden-Prognosen werden zusätzlich Stundenkerzen geladen: 1 Abfrage je Wert, höchstens alle 20 Minuten und nur, wenn ein Stunden-Zeitraum gewählt ist.</span></details>`;
 }
 function updateBanner(){
   let txt = "", demoBtn = false;
@@ -1082,6 +1272,7 @@ function renderOverview(){
   if (sortBy === "fc") list.sort((a, b) => fcv(b) - fcv(a));
   list.sort((a, b) => prioOf(b) - prioOf(a));   // stabil: Priorität zuerst, innerhalb davon die gewählte Sortierung
   renderSummary();
+  renderFeed();
   $("#grid").innerHTML = list.map((s, k) => cardHTML(s, k)).join("");
   pendingBefore.clear();
   list.forEach(s => { seenCards.add(s); if (!ready(s)) pendingBefore.add(s); });
@@ -1152,6 +1343,7 @@ $("#wArt").innerHTML = artSVG("market", "var(--accent)");
 
 function render(){
   updateNote(); updateBanner(); updateStatus();
+  if (mode !== "start") updateEvents();
   const showDetail = selected && ready(selected);
   $("#overview").hidden = !!showDetail;
   $("#detail").hidden = !showDetail;
@@ -1196,7 +1388,7 @@ function renderDetail(){
   const closed = isH && !d.crypto && d.marketOpen === false;
   const time = d.marketTime ? new Date(d.marketTime * 1000).toLocaleString("de-DE") : "";
   const conflict = !isH && f0 && Math.sign(f.exp) !== d.total.dir && Math.abs(f.exp) > 0.002;
-  const tabs = [["overview", "Übersicht"], ["forecast", "Prognose"], ["ind", `Indikatoren (${d.signals.length})`], ["back", "Rückblick & Kennzahlen"]];
+  const tabs = [["overview", "Übersicht"], ["news", "Neuigkeiten"], ["forecast", "Prognose"], ["ind", `Indikatoren (${d.signals.length})`], ["back", "Rückblick & Kennzahlen"]];
   let body = "";
   if (dTab === "overview"){
     body = `<div class="cols"><div>
@@ -1244,6 +1436,8 @@ function renderDetail(){
         Gibt es wenige unabhängige Vergleichsfälle, rückt die Prognose in Richtung „kein Trend“.
         „Früher richtig“ zeigt, wie oft die vorhergesagte Richtung gestimmt hat, wenn man die Prognose Schritt für Schritt nur mit den damals bekannten Daten gemacht hätte.
       </div></div>`;
+  } else if (dTab === "news"){
+    body = newsTabHTML(d);
   } else if (dTab === "ind"){
     const bygroup = {};
     d.signals.forEach(s => (bygroup[s.group] = bygroup[s.group] || []).push(s));
@@ -1341,6 +1535,12 @@ $("#grid").addEventListener("click", e => {
   if (rm){ e.stopPropagation(); removeSym(rm.dataset.rm); return; }
   const c = e.target.closest(".card"); if (c) openSym(c.dataset.s);
 });
+$("#newsFeed").addEventListener("click", e => {
+  const f = e.target.closest("[data-nff]"); if (f){ nfFilter = f.dataset.nff; save("nff", nfFilter); renderFeed(); return; }
+  if (e.target.closest("#nfMore")){ nfMore = !nfMore; renderFeed(); return; }
+  if (e.target.closest("details")) return;                       // Meldung auf- und zuklappen
+  const it = e.target.closest("[data-newsopen]"); if (it){ dTab = "news"; save("dtab", dTab); openSym(it.dataset.newsopen); }
+});
 $("#summary").addEventListener("click", e => { const t = e.target.closest("[data-open]"); if (t) openSym(t.dataset.open); });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && selected){ closeDetail(); return; }
@@ -1352,6 +1552,8 @@ $("#detail").addEventListener("click", e => {
   if (e.target.closest("#backBtn")) return closeDetail();
   const gp = e.target.closest("[data-genprof]"); if (gp){ generateProfile(gp.dataset.genprof); return; }
   if (e.target.closest("#rmDetail")) return removeSym(selected);
+  const snw = e.target.closest("[data-sumnews]"); if (snw){ summarizeNews(snw.dataset.sumnews); return; }
+  const rnw = e.target.closest("[data-reloadnews]"); if (rnw){ const x = newsStore[rnw.dataset.reloadnews]; if (x) x.t = 0; renderDetail(); tick(); return; }
   const sp_ = e.target.closest("[data-setprio]"); if (sp_){ setPrio(selected, +sp_.dataset.setprio); return; }
   const dt = e.target.closest("[data-dtab]"); if (dt){ if (dTab !== dt.dataset.dtab) tabAnim = true; dTab = dt.dataset.dtab; save("dtab", dTab); renderDetail(); return; }
   if (e.target.closest("[data-intra]")){ wantIntra.add(selected); if (mode === "demo") demoTick(); else { render(); tick(); } return; }
